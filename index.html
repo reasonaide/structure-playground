@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discourse Structure Playground</title>
+    <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.0.1",
+    "cytoscape": "https://esm.sh/cytoscape@3.28.1",
+    "@popperjs/core": "https://esm.sh/@popperjs/core@2.11.8",
+    "d3": "https://esm.sh/d3@7"
+  }
+}
+</script>
+</head>
+<body>
+
+    <!-- Utility Buttons Container -->
+    <div id="utilityButtons">
+        <!-- Sunburst filter button is now a direct child -->
+        <button id="toggleSunburstFilterButton" aria-label="Toggle Sunburst Filter Panel" title="Toggle Sunburst Filters" style="display: none;"><!-- SVG_FILTER --></button>
+        
+        <!-- Main column of buttons -->
+        <div id="mainUtilityColumn">
+            <button id="toggleControlsButton" aria-label="Toggle Controls Panel" title="Hide Controls"><!-- SVG_GEAR --></button>
+            <button id="toggleVisualizationButton" aria-label="Toggle Visualization Mode" title="Switch to Sunburst View"><!-- SVG_SUNBURST --></button>
+            <button id="toggleDarkModeButton" aria-label="Toggle Dark/Light Mode" title="Toggle Dark Mode"><!-- SVG_MOON --></button>
+        </div>
+    </div>
+
+    <!-- Edit Mode Controls Container -->
+    <div id="editModeControls">
+        <button id="toggleEditModeButton" aria-label="Toggle Edit Mode" title="Enter Edit Mode"><!-- SVG_PENCIL --></button>
+        <div id="editModeActionButtons" style="display: none;">
+            <button id="addNodeButton" aria-label="Add Node" title="Add New Node"><!-- SVG_PLUS --></button>
+            <button id="addEdgeButton" aria-label="Add Edge" title="Add Connection (Select Source Node First)" disabled><!-- SVG_LINK --></button>
+            <button id="undoButton" aria-label="Undo Last Edit" title="Undo" disabled><!-- SVG_UNDO --></button>
+            <button id="redoButton" aria-label="Redo Last Edit" title="Redo" disabled><!-- SVG_REDO --></button>
+        </div>
+    </div>
+
+
+    <div id="controlsOverlay">
+        <!-- Panel Switcher -->
+        <div id="panelSwitcher" class="control-section" style="padding-bottom: 5px; margin-bottom: 5px;">
+            <button id="switchToManualInputButton" class="panel-switch-button active">Manual Input</button>
+            <button id="switchToAiAssistantButton" class="panel-switch-button">AI Assistant</button>
+            <button id="switchToAiLabButton" class="panel-switch-button">AI Lab</button>
+        </div>
+
+        <!-- Manual Input Panel -->
+        <div id="manualInputPanel" class="input-panel active-panel">
+            <div class="control-section">
+                <label for="inputText">Paste Structure Output Here (or from AI):</label>
+                <textarea id="inputText" placeholder="# Example Input:
+DP_Start: This is the first discussion point.
+..."></textarea>
+                <button id="renderButton">Render Graph</button>
+                <div id="errorDisplay"></div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Panel -->
+        <div id="aiAssistantPanel" class="input-panel" style="display: none;">
+            <div class="control-section">
+                <div id="apiKeySection" style="display: none; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--section-border-color);">
+                     <p>AI features are currently disabled.</p>
+                     <button id="setApiKeyButton">Set API Key</button>
+                </div>
+                <label for="aiModelSelector">Select AI Model:</label>
+                <select id="aiModelSelector" style="width: calc(100% - 12px); margin-bottom: 10px; padding: 6px; border: 1px solid var(--input-border-color); border-radius: 3px; background-color: var(--graph-bg-color); color: var(--text-color);">
+                    <option value="gemini-2.5-flash" selected>gemini-2.5-flash</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                </select>
+                
+                <div id="aiChatArea">
+                    <div id="aiChatHistory"></div>
+                    <div id="aiGroundingResultsDiv" style="margin-top: 8px; font-size: 0.8em; display: none; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); max-height: 100px; overflow-y: auto;"></div>
+                    <textarea id="aiPromptInput" placeholder="Enter initial topic or refinement prompt..."></textarea>
+                    <div id="aiToolsToggles" style="display: flex; align-items: center; margin-bottom: 8px; gap: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center;">
+                            <input type="checkbox" id="searchGroundingToggle" style="margin-right: 4px;"/>
+                            <label for="searchGroundingToggle" style="font-size: 0.85em; cursor:pointer; white-space: nowrap;">Search Grounding</label>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <input type="checkbox" id="urlContextToggle" style="margin-right: 4px;"/>
+                            <label for="urlContextToggle" style="font-size: 0.85em; cursor:pointer; white-space: nowrap;">URL Context</label>
+                        </div>
+                    </div>
+                    <button id="sendAiPromptButton">Send Prompt</button>
+                    <div id="aiLoadingIndicator" style="display: none; margin-top: 5px; font-style: italic;">Processing...</div>
+                </div>
+
+                <div id="chatManagementSection" style="margin: 15px 0 5px 0; padding-top:10px; border-top: 1px solid var(--section-border-color);">
+                    <button id="exportChatButton">Export Chat & Structure</button>
+                    <label for="importChatInput" style="cursor: pointer; display: inline-block; padding: 7px 14px; margin-right: 5px; margin-top: 5px; border: 1px solid var(--button-border-color); background-color: var(--button-bg-color); color: var(--text-color); border-radius: 4px; font-size: 0.9em;">
+                        Import Chat & Structure
+                    </label>
+                    <input type="file" id="importChatInput" accept=".json" style="display: none;">
+                    <button id="clearChatButton" style="background-color: var(--error-bg-color); border-color: var(--error-border-color); color: var(--error-text-color);">Clear Chat & Structure</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Lab Panel -->
+        <div id="aiLabPanel" class="input-panel" style="display: none;">
+            <div class="control-section">
+                <label for="aiTemplateSelector">Edit AI System Prompt Template:</label>
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <select id="aiTemplateSelector" style="flex-grow: 1; margin-right: 8px; padding: 7px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color); font-size: 0.9em;"></select>
+                    <button id="aiTemplateNewButton" title="New Template" style="margin-right: 4px; padding: 6px 8px;"><!-- SVG_PLUS will be inserted by JS --></button>
+                    <button id="aiTemplateDeleteButton" title="Delete Selected Template" style="padding: 6px 8px;"><!-- SVG_TRASH will be inserted by JS --></button>
+                </div>
+                <div style="position: relative;">
+                     <textarea id="aiTemplateEditorTextArea" placeholder="Select or create a template to edit its content. Use {{TemplateName}} for nesting." style="width: calc(100% - 16px); min-height: 200px; margin-bottom: 0; font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; border: 1px solid var(--input-border-color); border-radius: 4px; padding: 8px; background-color: var(--graph-bg-color); color: var(--text-color); resize: vertical;"></textarea>
+                     <button id="aiTemplateSaveButton" class="icon-button" title="Save Template Changes" style="position: absolute; bottom: 10px; right: 10px; display: none;"><!-- SVG_CHECK will be inserted by JS --></button>
+                </div>
+                <div id="aiLabErrorDisplay" class="error-display-inline" style="display: none; margin-top: 5px;"></div>
+            </div>
+            <div class="control-section" style="font-size: 0.85em; opacity: 0.8;">
+                <p><strong>Instructions:</strong></p>
+                <ul>
+                    <li>Select a template from the dropdown to view/edit its content.</li>
+                    <li>Use the "+" button to create a new template. You'll be prompted for a name. System-reserved prefixes (RAI_, SYSTEM_, SUGGEST_EDIT_, SUGGEST_NEW_NODE_) are not allowed. User-created templates will be prefixed with 'MY_' if not already.</li>
+                    <li>Use the trash icon to delete the currently selected template (with confirmation). Core templates will revert to defaults if deleted.</li>
+                    <li>Inside a template, you can embed other templates using `{{TemplateName}}` (e.g., `{{RAI_RULESET}}`).</li>
+                    <li>The AI uses the `SYSTEM_PROMPT_MAIN` template by default, which typically embeds other rule templates.</li>
+                    <li>Templates for suggesting edits to existing nodes should be named starting with `SUGGEST_EDIT_` (e.g., `SUGGEST_EDIT_DECONTEXTUALISE`).</li>
+                    <li>Changes are saved per storage slot when you click the save icon.</li>
+                </ul>
+            </div>
+        </div>
+
+
+        <!-- Common Controls -->
+        <div id="searchSection" class="control-section">
+            <div class="search-input-group">
+                <input type="text" id="searchText" placeholder="Search Nodes (ID or Text)...">
+                <button id="searchButton">Search</button>
+            </div>
+        </div>
+
+        <div id="layoutSection" class="control-section">
+            <div id="nodeLabelModeSelector" style="margin-bottom: 8px;">
+                <label style="margin-bottom: 4px; display:block; font-weight: 600; font-size: 0.9em;">Node Display Mode:</label>
+                <div class="button-group">
+                    <button class="label-mode-button" data-mode="none" title="Show nodes as circles, no labels">Circles</button>
+                    <button class="label-mode-button" data-mode="truncated" title="Show DP ID and truncated text">Truncated</button>
+                    <button class="label-mode-button" data-mode="full" title="Show DP ID and full text">Full Text</button>
+                </div>
+            </div>
+            <div class="button-group" style="margin-bottom: 8px;">
+                <button id="saveLayoutButton" title="Save current node positions">Save Layout</button>
+                <button id="loadLayoutButton" title="Apply saved node positions" disabled>Load Saved Layout</button>
+                <button id="clearLayoutButton" title="Clear saved positions and apply default" disabled>Clear Saved Layout</button>
+            </div>
+            <div class="button-group">
+                <button id="layoutCompactButton" data-layout="coseCompact">Compact</button>
+                <button id="layoutDefaultButton" data-layout="coseDefault">Default</button>
+                <button id="layoutSpreadButton" data-layout="coseSpread">Spread</button>
+                <button id="layoutGridButton" data-layout="grid">Grid</button>
+                <button id="layoutCircleButton" data-layout="circle">Circle</button>
+            </div>
+        </div>
+
+        <!-- Sunburst Controls Section -->
+        <div id="sunburstControls" class="control-section" style="display: none;">
+            <label for="sunburstDepthInput" style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9em;">Sunburst Max Depth:</label>
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <input type="range" id="sunburstDepthInput" min="1" max="10" value="5" style="flex-grow: 1; margin-right: 10px;">
+                <span id="sunburstDepthValue" style="font-weight: bold; min-width: 20px; text-align: center;">5</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-weight: normal; font-size: 0.9em;">Options:</label>
+                <div class="button-group">
+                    <button id="sunburstLabelToggle" title="Hide chart labels"><!-- ICON_LABEL_ON will be inserted by JS --></button>
+                    <button id="sunburstFitToggle" title="Fit chart to viewport"><!-- ICON_FIT --></button>
+                </div>
+            </div>
+            <label style="display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 600; font-size: 0.9em;">Connection Mode:</label>
+            <div id="sunburstConnectionMode" class="button-group">
+                <button class="connection-mode-button active" data-mode="incoming-symmetric" title="Show incoming and symmetric connections">In &amp; Symm</button>
+                <button class="connection-mode-button" data-mode="incoming-only" title="Show only incoming connections">Incoming</button>
+                <button class="connection-mode-button" data-mode="outgoing-only" title="Show only outgoing connections">Outgoing</button>
+                <button class="connection-mode-button" data-mode="outgoing-symmetric" title="Show outgoing and symmetric connections">Out &amp; Symm</button>
+                <button class="connection-mode-button" data-mode="all" title="Show all connections">All</button>
+            </div>
+        </div>
+
+
+        <!-- Cloud Storage Section -->
+        <div id="cloudStorageSection" class="control-section">
+            <div class="cloud-storage-inline-group">
+                <label for="storageKeyInput">Slot ID:</label>
+                <input type="number" id="storageKeyInput" placeholder="1" style="width: 70px; min-width: 60px;">
+                <button id="loadFromStorageButton">Load</button>
+                <button id="saveToStorageButton">Save</button>
+                <div id="setupCloudSaveContainer" style="margin-left: 8px; display: none;">
+                    <button id="setupCloudSaveButton">Setup Cloud</button>
+                </div>
+                <div id="autoSyncControlsContainer" style="margin-left: 8px; display: flex; align-items: center;">
+                    <input type="checkbox" id="autoSyncToggle" aria-label="Toggle Auto Sync">
+                    <label for="autoSyncToggle" style="font-weight: normal; font-size: 0.85em; cursor:pointer;">Auto-Sync</label>
+                    <span id="autoSyncStatusIndicator" class="auto-sync-indicator" style="display: none;" title=""></span>
+                </div>
+            </div>
+            <div id="cloudStorageStatus" class="cloud-status-message" style="display: none;"></div>
+        </div>
+    </div> <!-- End of controlsOverlay -->
+
+
+    <div id="visualization-wrapper">
+        <div id="cy"></div>
+        <div id="sunburst-container" style="display: none;"></div>
+    </div>
+
+    <div id="sunburstFilterPanel" class="filter-panel" style="display: none;">
+        <!-- Filter controls will be populated by JS -->
+    </div>
+    
+    <div id="manual-tooltip"></div>
+
+    <div id="detailsPanel">
+        <div id="detailsPanelHeader">
+             <h4 id="detailsPanelTitle">Node Details</h4>
+             <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                 <button id="detailsNodeCenterButton" class="icon-button" title="Center View on this Node"><!-- SVG_TARGET --></button>
+                 <button id="detailsNodeDeleteButton" class="icon-button" title="Delete Node" style="display:none;"><!-- SVG_TRASH --></button>
+                 <button id="detailsPanelCloseButton" class="icon-button" title="Close Details"><!-- SVG_CANCEL_X --></button>
+             </div>
+        </div>
+        <div id="selectedNodeText">Select a node to see its details.</div>
+        
+        <div id="editNodeTextContainer" style="display:none;">
+            <textarea id="detailsNodeEditTextArea"></textarea>
+            <div id="nodeTextEditActions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                <div style="display: flex; align-items: center;">
+                    <button id="detailsNodeSuggestAiButton" class="icon-button" title="Suggest text edit with AI" style="padding: 4px 6px; visibility: hidden;"><!-- SVG_AI_SUGGEST --></button>
+                    <select id="detailsNodeSuggestionTaskSelector" style="margin-left: 5px; padding: 4px; font-size: 0.85em; max-width: 150px; border: 1px solid var(--input-border-color); border-radius: 3px; background-color: var(--graph-bg-color); color: var(--text-color); visibility: hidden;"></select>
+                    <span id="detailsNodeAiLoadingIndicator" style="font-size: 0.8em; font-style: italic; display: none; margin-left: 5px;">AI thinking...</span>
+                </div>
+                <button id="detailsNodeSaveTextButton" class="icon-button" title="Save Node Text" style="display:none;"><!-- SVG_CHECK --></button>
+            </div>
+            <div id="detailsNodeWikidataReferencesList" style="display: none; margin-top: 10px;">
+                <!-- Wikidata items will be populated here by JS -->
+            </div>
+        </div>
+
+        <!-- UI for Confirming Edge Creation to EXISTING node -->
+        <div id="confirmEdgeUI" style="display: none; margin-top: 15px; padding-top:10px; border-top: 1px solid var(--section-border-color);">
+            <h5>Add Connection to Existing Node</h5>
+            <div id="confirmEdgeSourceInfo" style="margin-bottom: 5px; font-size: 0.9em;"></div>
+            <select id="confirmEdgePredicateSelect" style="width: 100%; padding: 8px; margin-bottom: 5px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color);"></select>
+            <div id="confirmEdgeTargetInfo" style="margin-bottom: 10px; font-size: 0.9em;"></div>
+            <div style="text-align: right;">
+                <button id="confirmEdgeConfirmButton" class="icon-button" title="Confirm Connection"><!-- SVG_CHECK --></button>
+                <button id="confirmEdgeCancelButton" class="icon-button" title="Cancel Connection"><!-- SVG_CANCEL_X --></button>
+            </div>
+        </div>
+
+        <!-- UI for Confirming Edge Creation to NEW node -->
+        <div id="addConnectionToNewNodeUI" style="display: none; margin-top: 15px; padding-top:10px; border-top: 1px solid var(--section-border-color);">
+            <h5>Add Connection to New Node</h5>
+            <div id="acnnSourceInfo" style="margin-bottom: 5px; font-size: 0.9em;"></div>
+            <select id="acnnPredicateSelect" style="width: 100%; padding: 8px; margin-bottom: 5px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color);"></select>
+            
+            <div id="acnnNewNodeTypeSelector" style="margin-top: 10px; margin-bottom: 5px;">
+                <label style="font-weight: normal; font-size: 0.9em; display: block; margin-bottom: 4px;">New Node Type:</label>
+                <div id="acnnNewNodeTypeGroup" class="button-group-radio">
+                    <!-- Radio buttons will be populated by JS -->
+                </div>
+            </div>
+
+            <label for="acnnNewNodeTextArea" style="display: block; margin-bottom: 3px; font-weight: normal; font-size: 0.9em;">New Node Text:</label>
+            <textarea id="acnnNewNodeTextArea" placeholder="Enter text for the new node..." style="width: calc(100% - 16px); min-height: 60px; margin-bottom: 10px; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color); font-family: inherit; font-size: 0.95em; resize: vertical;"></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <!-- AI Suggest button and loading indicator on the left -->
+                <div>
+                    <button id="acnnSuggestAiButton" class="icon-button" title="Suggest text with AI" style="padding: 4px 6px; visibility: hidden;"><!-- SVG_AI_SUGGEST will be inserted by JS --></button>
+                    <span id="acnnAiLoadingIndicator" style="font-size: 0.8em; font-style: italic; display: none; margin-left: 5px;">AI thinking...</span>
+                </div>
+                <!-- Confirm/Cancel buttons on the right -->
+                <div>
+                    <button id="acnnConfirmButton" class="icon-button" title="Create Node & Connection"><!-- SVG_CHECK --></button>
+                    <button id="acnnCancelButton" class="icon-button" title="Cancel"><!-- SVG_CANCEL_X --></button>
+                </div>
+            </div>
+        </div>
+
+
+        <div id="connectedNodesList" style="margin-top: 10px;"></div>
+
+        <!-- Custom Confirmation/Prompt Dialog (Structure updated) -->
+        <div id="customConfirmOverlay" style="display: none;">
+            <div id="customConfirmDialog">
+                <p id="customConfirmMessage"></p>
+                <input type="text" id="customPromptInput" style="display: none; width: calc(100% - 20px); margin-bottom: 15px; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color); font-size: 0.9em;" />
+                <div id="customConfirmButtons">
+                    <button id="customConfirmOkButton">Confirm</button>
+                    <button id="customConfirmCancelButton">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div> <!-- End of detailsPanel -->
+
+    <!-- API Key Modal -->
+    <div id="apiKeyModalOverlay">
+        <div id="apiKeyModalDialog">
+            <h4>Google AI API Key Required</h4>
+            <p>To use the AI Assistant features, please enter your Google AI API key. You can get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
+            <input type="password" id="apiKeyInput" placeholder="Enter your API Key">
+            <div id="apiKeyModalButtons">
+                <button id="apiKeyProceedWithoutButton">Use without AI features</button>
+                <button id="apiKeySaveButton">Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase Setup Modal -->
+    <div id="supabaseSetupModalOverlay">
+        <div id="supabaseSetupModalDialog">
+            <h4>Setup Cloud Storage (Supabase)</h4>
+            <p>To enable cloud saving and auto-sync, you need a free Supabase account. Follow these steps:</p>
+            <ol style="font-size: 0.85em; line-height: 1.5; margin-bottom: 15px;">
+                <li>Go to <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a> and create a new project.</li>
+                <li>Go to the 'SQL Editor' section, click '+ New query', and run the following SQL to create the table:
+                    <pre style="background-color: var(--graph-bg-color); padding: 8px; border-radius: 4px; white-space: pre-wrap; word-break: break-all;"><code>create table public.rai_structure_playground (
+  key text not null,
+  slot text not null,
+  value jsonb null,
+  updated_at timestamptz not null default now(),
+  constraint rai_structure_playground_pkey primary key (key, slot)
+);</code></pre>
+                </li>
+                <li>Go to 'Project Settings' > 'API'. Copy the 'Project URL' and the 'public' 'anon' key from the 'Project API keys' section.</li>
+                <li>Paste the values below. This information is only stored for your current browser session.</li>
+            </ol>
+            <label for="supabaseUrlInput">Supabase Project URL:</label>
+            <input type="text" id="supabaseUrlInput" placeholder="https://xxxxxxxx.supabase.co">
+            <label for="supabaseKeyInput">Supabase Anon (Public) Key:</label>
+            <input type="password" id="supabaseKeyInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            <div id="supabaseSetupErrorDisplay" class="error-display-inline" style="display: none; margin-bottom: 15px;"></div>
+            <div id="supabaseModalButtons">
+                <button id="supabaseCancelButton">Cancel</button>
+                <button id="supabaseSaveButton">Save &amp; Enable</button>
+            </div>
+        </div>
+    </div>
+
+
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,1556 @@
+
+
+/* --- Base Styles & Variables --- */
+:root {
+    --bg-color: #e9e9e9;
+    --graph-bg-color: #ffffff;
+    --overlay-bg-color: rgba(250, 250, 250, 0.97); /* Slightly more opaque */
+    --overlay-border-color: #ccc;
+    --text-color: #333;
+    --button-bg-color: #f0f0f0;
+    --button-border-color: #bbb;
+    --button-hover-bg-color: #e0e0e0;
+    --button-hover-border-color: #aaa;
+    --button-active-bg-color: #d0d0d0; /* For active state of layout buttons */
+    --button-active-border-color: #999; /* For active state of layout buttons */
+    --input-border-color: #ccc;
+    --section-border-color: #eee;
+    --error-bg-color: #fadedb;
+    --error-border-color: #e74c3c;
+    --error-text-color: #c0392b;
+    --success-bg-color: #d4edda; /* For success messages */
+    --success-border-color: #c3e6cb; /* For success messages */
+    --success-text-color: #155724; /* For success messages */
+    --tooltip-bg-color: #333;
+    --tooltip-text-color: white;
+    --node-bg-color: #eaf2f8;
+    --node-border-color: #aed6f1;
+    --node-text-color: #333;
+    --searched-node-bg-color: #f9e79f;
+    --searched-node-border-color: #f1c40f;
+    --selected-node-border-color: #3498DB; /* Bright blue for selected node border in light mode */
+    --edge-label-bg-color: #ffffff;
+    --edge-label-text-color: #555;
+    --details-panel-bg: rgba(248, 249, 250, 0.97); /* Slightly adjusted */
+    --details-panel-border: #adb5bd; /* Slightly darker border */
+    --details-section-header-bg: #e9ecef; /* Lighter header */
+    --details-summary-text-color: #212529; /* Darker summary text for light bg */
+    --list-item-hover-bg: #e9ecef;
+    --edit-mode-active-color: #28a745; /* Green for active edit mode */
+    --edit-mode-active-accent-color: #ffc107; /* Accent color for active edit mode buttons like Add Edge */
+    --icon-button-svg-size: 1.6em; /* Default size for icon SVGs */
+    --icon-success-color: #28a745; /* Green for success icons */
+    --icon-error-color: #dc3545;   /* Red for error/cancel icons */
+    --warning-color: #ffc107; /* Yellow for warnings/attention */
+    --ai-suggest-icon-color: #007bff; /* Blue for AI suggest */
+    --link-color: #007bff; /* Standard link blue */
+    --sunburst-root-bg-color: #ccc;
+}
+
+body.dark-mode {
+    --bg-color: #212529;
+    --graph-bg-color: #2b2f33; /* Darker graph */
+    --overlay-bg-color: rgba(52, 58, 64, 0.97); /* Dark overlay */
+    --overlay-border-color: #495057;
+    --text-color: #f8f9fa; /* Light text */
+    --button-bg-color: #495057;
+    --button-border-color: #6c757d;
+    --button-hover-bg-color: #5a6268;
+    --button-hover-border-color: #6c757d;
+    --button-active-bg-color: #3a3f44; /* Dark mode active layout button */
+    --button-active-border-color: #555c63; /* Dark mode active layout button */
+    --input-border-color: #6c757d;
+    --section-border-color: #495057;
+    --error-bg-color: #5c3735;
+    --error-border-color: #a14d4a;
+    --error-text-color: #ffc0cb;
+    --success-bg-color: #2a4832; /* Dark mode success */
+    --success-border-color: #3c6c48; /* Dark mode success */
+    --success-text-color: #a7d7b4; /* Dark mode success */
+    --tooltip-bg-color: #333;
+    --tooltip-text-color: white;
+    --node-bg-color: #3a506b;
+    --node-border-color: #5c7a99;
+    --node-text-color: #f8f9fa;
+    --searched-node-bg-color: #6b6240;
+    --searched-node-border-color: #b0983c;
+    --selected-node-border-color: #FFFFFF; /* High-contrast white for selected node border in dark mode */
+    --edge-label-bg-color: var(--graph-bg-color);
+    --edge-label-text-color: var(--text-color);
+    --details-panel-bg: rgba(52, 58, 64, 0.97);
+    --details-panel-border: #6c757d;
+    --details-section-header-bg: #495057;
+    --details-summary-text-color: #f8f9fa;
+    --list-item-hover-bg: #495057;
+    --edit-mode-active-color: #30c755; /* Brighter green for dark mode */
+    --edit-mode-active-accent-color: #ffca2c; /* Brighter accent for dark mode */
+    --icon-success-color: #30c755; /* Brighter Green for success icons in dark mode */
+    --icon-error-color: #e74c3c;   /* Brighter Red for error/cancel icons in dark mode */
+    --warning-color: #ffd966; /* Lighter yellow for dark mode */
+    --ai-suggest-icon-color: #3498db; /* Lighter blue for AI suggest in dark mode */
+    --link-color: #5DADE2; /* Lighter blue for links in dark mode */
+    --sunburst-root-bg-color: #555;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* System fonts */
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* --- Main Visualization Area --- */
+#visualization-wrapper {
+    flex-grow: 1;
+    position: relative; /* For absolutely positioned children */
+}
+
+#cy, #sunburst-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: var(--graph-bg-color);
+    transition: background-color 0.3s;
+}
+
+/* --- Sunburst Specific Styles --- */
+#sunburst-container svg {
+    width: 100%;
+    height: 100%;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+#sunburst-container path.sunburst-segment {
+    cursor: pointer;
+    stroke: var(--graph-bg-color);
+    stroke-width: 1px;
+    transition: opacity 0.2s, stroke 0.2s, stroke-width 0.2s; /* Added transitions */
+}
+
+#sunburst-container path.sunburst-segment:hover {
+    opacity: 0.8;
+}
+
+#sunburst-container path.sunburst-segment.selected {
+    stroke: var(--selected-node-border-color);
+    stroke-width: 4px; /* Increased width for prominence */
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 5px var(--selected-node-border-color)); /* Added glow */
+}
+
+#sunburst-container path.sunburst-segment.outgoing-connection {
+    opacity: 0.4;
+}
+
+#sunburst-container path.sunburst-segment.outgoing-connection:hover {
+    opacity: 0.7;
+}
+
+#sunburst-container .sunburst-label {
+    fill: var(--text-color);
+    pointer-events: none;
+    text-anchor: middle;
+    user-select: none;
+}
+
+#sunburst-container .sunburst-root {
+    fill: var(--sunburst-root-bg-color);
+    stroke: var(--graph-bg-color);
+    stroke-width: 1px;
+}
+
+#sunburst-container .sunburst-root.selected {
+    stroke: var(--selected-node-border-color);
+    stroke-width: 4px; /* Increased width for prominence */
+    filter: drop-shadow(0 0 5px var(--selected-node-border-color)); /* Added glow */
+}
+
+
+/* --- Controls Overlay (Left Panel) --- */
+#controlsOverlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    background-color: var(--overlay-bg-color);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Softer shadow */
+    max-width: 420px; /* Slightly narrower */
+    max-height: calc(100vh - 70px); /* More padding from bottom */
+    overflow-y: auto;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
+    border: 1px solid var(--overlay-border-color);
+}
+
+#controlsOverlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.control-section {
+    margin-bottom: 12px; /* Reduced margin */
+    padding-bottom: 8px; /* Reduced padding */
+    border-bottom: 1px solid var(--section-border-color);
+    transition: border-color 0.3s;
+}
+.control-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+#controlsOverlay label {
+    display: block;
+    margin-bottom: 4px; /* Slightly reduced spacing */
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+#inputText {
+    width: calc(100% - 12px); /* Account for padding */
+    min-height: 100px; /* Slightly reduced min-height */
+    margin-bottom: 8px;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    display: block;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    resize: vertical;
+}
+#inputText:disabled {
+    background-color: var(--section-border-color);
+    cursor: not-allowed;
+}
+
+
+#errorDisplay {
+    color: var(--error-text-color);
+    font-size: 0.85em;
+    margin-top: 8px; /* Reduced margin */
+    max-height: 70px;
+    overflow-y: auto;
+    border: 1px solid var(--error-border-color);
+    padding: 8px 10px;
+    background-color: var(--error-bg-color);
+    border-radius: 4px;
+    display: none;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+/* General inline error display style for AI Lab */
+.error-display-inline {
+    color: var(--error-text-color);
+    font-size: 0.85em;
+    margin-top: 5px; /* Adjust as needed */
+    padding: 6px 8px;
+    background-color: var(--error-bg-color);
+    border: 1px solid var(--error-border-color);
+    border-radius: 4px;
+    display: none; /* Initially hidden */
+}
+
+
+/* --- General Button Styling --- */
+button {
+    padding: 7px 12px; /* Slightly reduced padding */
+    margin-right: 6px;
+    margin-top: 6px; /* Slightly reduced margin */
+    cursor: pointer;
+    border: 1px solid var(--button-border-color);
+    background-color: var(--button-bg-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    font-size: 0.9em;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    box-sizing: border-box; /* Ensure padding and border are included in width/height */
+    display: inline-flex; /* For aligning SVGs nicely */
+    align-items: center;
+    justify-content: center;
+}
+button:hover {
+    background-color: var(--button-hover-bg-color);
+    border-color: var(--button-hover-border-color);
+}
+button:active {
+    transform: translateY(1px);
+}
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+button.active { /* Style for active layout buttons */
+    background-color: var(--button-active-bg-color);
+    border-color: var(--button-active-border-color);
+    font-weight: bold;
+}
+
+/* --- SVG Icon Styling in Buttons --- */
+button svg {
+    width: var(--icon-button-svg-size, 1em); /* Default size, can be overridden */
+    height: var(--icon-button-svg-size, 1em);
+    fill: currentColor; /* Inherit button text color */
+    /* Add margin if button text is also present, e.g., margin-right: 4px; */
+}
+
+
+/* --- Icon Button Styling (for delete, save text etc.) --- */
+.icon-button {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 1em; /* Base font size, SVG will scale relative to this or its own var */
+    padding: 4px;
+    margin: 0 2px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.icon-button:hover {
+    opacity: 1;
+    background-color: transparent; /* Override general hover */
+}
+.icon-button svg {
+    width: var(--icon-button-svg-size); 
+    height: var(--icon-button-svg-size);
+}
+
+
+/* --- Utility Buttons (Bottom Right) --- */
+#utilityButtons {
+    position: fixed;
+    bottom: 15px;
+    right: 15px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: row; /* Places items side-by-side */
+    gap: 10px;
+    align-items: flex-end; /* Aligns the filter button and the column to their bottom edges */
+}
+
+#mainUtilityColumn {
+    display: flex;
+    flex-direction: column; /* Stacks the three main buttons vertically */
+    gap: 10px;
+}
+
+#utilityButtons button {
+    width: 48px; 
+    height: 48px; 
+    padding: 0;
+    margin: 0; /* Use gap instead of margin */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    font-size: 1.2em; /* Base for em units inside */
+}
+#utilityButtons button svg {
+    width: 1.8em; 
+    height: 1.8em;
+}
+
+/* Spinner for AI Processing */
+.spinner {
+    width: 1.8em;
+    height: 1.8em;
+    border: 3px solid var(--button-border-color); /* The track */
+    border-top-color: var(--selected-node-border-color); /* The moving part, use a highlight color */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    opacity: 0.8;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* --- Edit Mode Controls (Bottom Left) --- */
+#editModeControls {
+    position: fixed;
+    bottom: 15px;
+    left: 15px;
+    z-index: 1001;
+    display: flex;
+    align-items: flex-end;
+}
+
+#editModeControls button {
+    width: 48px; 
+    height: 48px; 
+    padding: 0;
+    margin-right: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    font-size: 1.2em; /* Base for em units inside */
+}
+#editModeControls button svg {
+    width: 1.8em; /* Relative to button's font-size */
+    height: 1.8em;
+}
+#editModeControls button:last-child {
+    margin-right: 0;
+}
+
+#toggleEditModeButton.edit-mode-active {
+    background-color: var(--edit-mode-active-color);
+    color: white; /* This will make the SVG white */
+    border-color: var(--edit-mode-active-color);
+}
+#toggleEditModeButton.edit-mode-active:hover {
+    background-color: color-mix(in srgb, var(--edit-mode-active-color) 90%, black);
+}
+
+#addEdgeButton.edit-mode-active-accent {
+    background-color: var(--edit-mode-active-accent-color);
+    color: black;
+    border-color: var(--edit-mode-active-accent-color);
+}
+#addEdgeButton.edit-mode-active-accent:hover {
+    background-color: color-mix(in srgb, var(--edit-mode-active-accent-color) 90%, black);
+}
+
+
+#editModeActionButtons {
+    display: flex;
+    margin-left: 5px;
+}
+
+
+/* --- Specific Buttons & Input Groups --- */
+
+.search-input-group {
+    display: flex;
+    align-items: center;
+}
+.search-input-group input[type="text"] {
+    flex-grow: 1;
+    margin-right: 6px;
+    padding: 7px 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    font-size: 0.9em;
+    line-height: normal;
+    box-sizing: border-box;
+}
+
+.search-input-group #searchButton {
+    margin-right: 0;
+}
+
+
+/* Node Label Mode Selector & Layout Buttons */
+.button-group {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping if not enough space, though usually not for 3-5 buttons */
+}
+
+.button-group > button { /* General styling for buttons directly inside a button-group */
+    flex-grow: 1; /* Make buttons share space equally */
+}
+
+.button-group > button:last-child {
+    margin-right: 0; /* Ensure last button in any group has no right margin */
+}
+
+/* Radio button group styling */
+.button-group-radio {
+    display: flex;
+    flex-wrap: wrap;
+}
+.button-group-radio label {
+    flex-grow: 1;
+    text-align: center;
+    padding: 7px 5px;
+    margin-right: -1px;
+    margin-top: -1px;
+    cursor: pointer;
+    border: 1px solid var(--button-border-color);
+    background-color: var(--button-bg-color);
+    color: var(--text-color);
+    font-size: 0.85em;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    user-select: none;
+    text-transform: capitalize;
+}
+.button-group-radio label:first-of-type {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+.button-group-radio label:last-of-type {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    margin-right: 0;
+}
+.button-group-radio input[type="radio"] {
+    display: none; /* Hide the actual radio button */
+}
+.button-group-radio input[type="radio"]:checked + label {
+    background-color: var(--button-active-bg-color);
+    border-color: var(--button-active-border-color);
+    font-weight: bold;
+    z-index: 1;
+    position: relative;
+}
+.button-group-radio input[type="radio"]:disabled + label {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--bg-color);
+    color: color-mix(in srgb, var(--text-color) 60%, transparent);
+}
+.button-group-radio input[type="radio"]:disabled:checked + label {
+    background-color: color-mix(in srgb, var(--button-active-bg-color) 50%, var(--bg-color));
+}
+
+/* Specific overrides if needed, e.g., for .label-mode-button if it's not a direct child or has other structure */
+#nodeLabelModeSelector .label-mode-button {
+    /* flex-grow: 1; is handled by the general .button-group > button rule if it's a direct child */
+}
+#nodeLabelModeSelector .label-mode-button:last-child {
+    /* margin-right: 0; is handled by the general .button-group > button:last-child rule */
+}
+
+
+/* --- Manual Tooltip --- */
+#manual-tooltip {
+    position: fixed;
+    background-color: var(--tooltip-bg-color);
+    color: var(--tooltip-text-color);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    max-width: 350px;
+    white-space: pre-wrap; /* Allow wrapping */
+    word-wrap: break-word; /* Ensure long words break */
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border: 1px solid var(--overlay-border-color);
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+#manual-tooltip hr {
+    border: none;
+    border-top: 1px solid var(--section-border-color);
+    margin: 4px 0;
+}
+
+/* --- Style for [Term](QID) references --- */
+.reference-link {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    cursor: help;
+    color: var(--link-color); /* Optional: use link color */
+}
+.reference-link:hover {
+    text-decoration-style: solid;
+}
+
+
+/* --- Details Panel (Right Overlay) --- */
+#detailsPanel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 380px;
+    max-height: calc(100vh - 20px);
+    background-color: var(--details-panel-bg);
+    border: 1px solid var(--details-panel-border);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    overflow-y: auto;
+    z-index: 9;
+    display: none;
+    font-size: 0.9em;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+#detailsPanelHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--section-border-color);
+    margin-bottom: 12px;
+}
+#detailsPanelHeader h4 {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-bottom: 8px;
+    font-size: 1.15em;
+    color: var(--text-color);
+    flex-grow: 1;
+    display: flex; /* For aligning badge */
+    align-items: center; /* For aligning badge */
+}
+#detailsNodeCenterButton {
+    padding: 0 5px;
+    align-self: center;
+}
+#detailsNodeCenterButton svg {
+    width: 1.7em;
+    height: 1.7em;
+    fill: var(--text-color);
+}
+#detailsNodeDeleteButton {
+    padding: 0 5px;
+    align-self: center;
+}
+#detailsNodeDeleteButton svg {
+     width: 1.7em; 
+     height: 1.7em;
+}
+#detailsPanelCloseButton {
+    padding: 0 5px;
+    align-self: center;
+}
+#detailsPanelCloseButton svg {
+    width: 1.7em;
+    height: 1.7em;
+    fill: var(--text-color);
+}
+
+.dp-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25rem;
+    text-transform: capitalize;
+    margin-left: 8px;
+    border: 1px solid transparent;
+}
+.dp-type-badge.type-statement {
+    color: #004085;
+    background-color: #cce5ff;
+    border-color: #b8daff;
+}
+.dp-type-badge.type-question {
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+.dp-type-badge.type-argument {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+.dp-type-badge.type-reference {
+    color: #383d41;
+    background-color: #e2e3e5;
+    border-color: #d6d8db;
+}
+.dp-type-badge.type-unspecified {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+body.dark-mode .dp-type-badge.type-statement {
+    color: #b8daff;
+    background-color: #004085;
+}
+body.dark-mode .dp-type-badge.type-question {
+    color: #ffeeba;
+    background-color: #856404;
+}
+body.dark-mode .dp-type-badge.type-argument {
+    color: #c3e6cb;
+    background-color: #155724;
+}
+body.dark-mode .dp-type-badge.type-reference {
+    color: #d6d8db;
+    background-color: #383d41;
+}
+body.dark-mode .dp-type-badge.type-unspecified {
+    color: #f5c6cb;
+    background-color: #721c24;
+}
+
+
+#selectedNodeText {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: var(--graph-bg-color);
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    white-space: pre-wrap; /* Allow wrapping of text and preserved newlines */
+    word-wrap: break-word; /* Ensure long words (or QIDs) break */
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+#editNodeTextContainer {
+    margin-bottom: 15px;
+    position: relative;
+    z-index: 1;
+}
+#detailsNodeEditTextArea {
+    width: calc(100% - 16px);
+    min-height: 80px;
+    padding: 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    font-size: 0.95em;
+    line-height: 1.4;
+    resize: vertical;
+    display: block;
+    margin-bottom: 0; /* Adjusted for #nodeTextEditActions */
+}
+#nodeTextEditActions { /* Container for AI suggest and Save button */
+    /* display: flex; justify-content: space-between; align-items: center; margin-top: 5px; */ /* Defined in HTML */
+}
+#detailsNodeSaveTextButton {
+    padding: 4px 8px;
+    /* float: right; Removed, using flexbox on parent */
+}
+#detailsNodeSaveTextButton svg {
+    width: 1.9em; /* INCREASED specific size */
+    height: 1.9em;
+    fill: var(--icon-success-color); 
+}
+/* Styling for AI Suggest elements in Node Text Edit */
+#detailsNodeSuggestAiButton svg {
+    width: 1.7em;
+    height: 1.7em;
+    fill: var(--ai-suggest-icon-color);
+}
+#detailsNodeSuggestAiButton:disabled svg {
+    fill: currentColor;
+    opacity: 0.5;
+}
+#detailsNodeSuggestionTaskSelector {
+    /* visibility: hidden; by default from JS */
+    /* other styles in HTML, can be moved here */
+}
+#detailsNodeAiLoadingIndicator {
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+/* Wikidata References List Styling */
+#detailsNodeWikidataReferencesList {
+    margin-top: 10px;
+    padding: 8px;
+    background-color: var(--graph-bg-color); /* Slightly different from panel for distinction */
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    font-size: 0.85em;
+    max-height: 150px; /* Limit height and allow scroll if many items */
+    overflow-y: auto;
+}
+.wikidata-reference-item {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--section-border-color);
+    line-height: 1.3;
+    display: flex; /* Added for flex layout */
+    justify-content: space-between; /* Added */
+    align-items: center; /* Added */
+}
+.wikidata-reference-item:last-child {
+    border-bottom: none;
+}
+
+.wikidata-item-text-content { /* New wrapper for text */
+    flex-grow: 1;
+    margin-right: 8px; /* Space before the remove button */
+}
+
+.wikidata-reference-item .user-term {
+    font-weight: bold;
+    color: var(--link-color); /* Match reference link color */
+}
+.wikidata-reference-item .qid {
+    color: var(--text-color);
+    opacity: 0.8;
+    margin: 0 4px;
+}
+.wikidata-reference-item .official-label {
+    color: var(--text-color);
+}
+.wikidata-reference-item .description {
+    display: block; /* Make description take full width below */
+    margin-left: 5px; /* Indent description slightly */
+    color: var(--text-color);
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px; /* Adjusted for panel width minus button space */
+    cursor: help; /* Indicate full description is available on hover */
+}
+
+.remove-wikidata-reference-button { /* New button style */
+    background: none;
+    border: none;
+    color: var(--icon-error-color);
+    cursor: pointer;
+    padding: 2px 4px;
+    margin: 0;
+    flex-shrink: 0; /* Prevent button from shrinking */
+    opacity: 0.6;
+}
+.remove-wikidata-reference-button:hover {
+    opacity: 1;
+}
+.remove-wikidata-reference-button svg {
+    width: 1.2em; /* Smaller icon for list item */
+    height: 1.2em;
+    fill: currentColor;
+}
+
+
+#detailsPanel details {
+    margin-bottom: 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    background-color: var(--graph-bg-color);
+}
+#detailsPanel details summary {
+    padding: 10px 12px;
+    font-weight: 600;
+    color: var(--details-summary-text-color);
+    cursor: pointer;
+    border-radius: 3px 3px 0 0;
+    transition: opacity 0.2s;
+    outline: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#detailsPanel details[open] summary {
+    border-bottom: 1px solid var(--section-border-color);
+}
+#detailsPanel details summary:hover {
+    opacity: 0.85;
+}
+#detailsPanel ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+#detailsPanel li {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--section-border-color);
+    transition: background-color 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#detailsPanel li:last-child {
+    border-bottom: none;
+}
+#detailsPanel li:hover {
+    background-color: var(--list-item-hover-bg);
+}
+#detailsPanel li .connection-text {
+    flex-grow: 1;
+    cursor: pointer;
+    white-space: pre-wrap; /* Allow wrapping */
+    word-wrap: break-word; /* Ensure long words/QIDs break */
+}
+#detailsPanel li .delete-edge-button {
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+#detailsPanel li .delete-edge-button svg { 
+    width: 1.5em; 
+    height: 1.5em;
+}
+
+.details-section-header {
+    margin-top: 0px;
+    margin-bottom: 5px;
+    font-size: 0.95em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--section-border-color);
+    padding: 5px 8px;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.details-section-header.subsequent-header {
+    margin-top: 20px;
+}
+.add-to-new-node-button {
+    padding: 0 6px;
+    margin-left: 8px;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    opacity: 0.6;
+    cursor: pointer;
+}
+.add-to-new-node-button:hover {
+    opacity: 1;
+}
+.add-to-new-node-button svg { /* Styling for plus icon */
+    width: 1.9em; /* INCREASED size */
+    height: 1.9em;
+}
+
+body.dark-mode .add-to-new-node-button.icon-button {
+    color: var(--selected-node-border-color);
+}
+
+
+#confirmEdgeUI h5, #addConnectionToNewNodeUI h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.05em;
+    color: var(--text-color);
+}
+#confirmEdgeSourceInfo, #confirmEdgeTargetInfo, #acnnSourceInfo {
+    padding: 6px;
+    background-color: var(--graph-bg-color);
+    border: 1px solid var(--input-border-color);
+    border-radius: 3px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60px;
+    overflow-y: auto;
+}
+#confirmEdgePredicateSelect, #acnnPredicateSelect {
+}
+#confirmEdgeUI .icon-button svg, #addConnectionToNewNodeUI .icon-button svg {
+    width: 1.9em; /* INCREASED */
+    height: 1.9em;
+}
+
+/* Coloring for Confirm/Cancel buttons in Edge UI */
+#confirmEdgeConfirmButton svg,
+#acnnConfirmButton svg {
+    fill: var(--icon-success-color); 
+}
+#confirmEdgeCancelButton svg,
+#acnnCancelButton svg {
+    fill: var(--icon-error-color); 
+}
+
+#acnnNewNodeTextArea {
+}
+
+/* AI Suggest button specific styling */
+#acnnSuggestAiButton svg {
+    width: 1.7em; /* Slightly smaller than confirm/cancel */
+    height: 1.7em;
+    fill: var(--ai-suggest-icon-color);
+}
+#acnnSuggestAiButton:disabled svg {
+    fill: currentColor; /* Use default button disabled color for SVG */
+    opacity: 0.5;
+}
+#acnnAiLoadingIndicator {
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+
+/* --- Panel Switcher --- */
+#panelSwitcher {
+    display: flex;
+    justify-content: space-around;
+    border-bottom: 1px solid var(--section-border-color);
+}
+.panel-switch-button {
+    flex-grow: 1;
+    margin: 0 2px 5px 2px !important;
+    padding: 8px 5px !important;
+    font-size: 0.85em !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-bottom-color: transparent !important;
+}
+.panel-switch-button.active {
+    background-color: var(--overlay-bg-color) !important;
+    border-color: var(--overlay-border-color) !important;
+    border-bottom-color: transparent !important;
+    font-weight: bold;
+    position: relative;
+    top: 1px;
+}
+.input-panel {
+}
+.input-panel.active-panel {
+    display: block;
+}
+
+
+/* --- AI Assistant Panel --- */
+#aiChatArea {
+    margin-top: 10px;
+}
+#aiChatHistory {
+    height: 180px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    padding: 10px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+    background-color: var(--graph-bg-color);
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+#aiChatHistory .user-message, #aiChatHistory .ai-message, #aiChatHistory .ai-code-message {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    word-wrap: break-word;
+}
+#aiChatHistory .user-message {
+    background-color: var(--node-bg-color);
+    text-align: right;
+    margin-left: 20%;
+}
+#aiChatHistory .ai-message {
+    background-color: var(--details-section-header-bg);
+    margin-right: 20%;
+}
+#aiChatHistory .ai-code-message {
+    background-color: #f0f0f0;
+    color: #333;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    white-space: pre-wrap;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    margin-top: 5px;
+    margin-bottom: 10px;
+}
+body.dark-mode #aiChatHistory .ai-code-message {
+    background-color: #222;
+    color: #ddd;
+    border-color: #555;
+}
+
+#aiPromptInput {
+    width: calc(100% - 12px);
+    min-height: 50px;
+    margin-bottom: 8px;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    resize: vertical;
+}
+
+#apiKey {
+    width: calc(100% - 12px) !important;
+    margin-bottom: 10px;
+}
+
+#chatManagementSection label[for="importChatInput"] {
+    display: inline-block;
+}
+#chatManagementSection label[for="importChatInput"]:hover {
+    background-color: var(--button-hover-bg-color);
+    border-color: var(--button-hover-border-color);
+}
+
+/* AI Tools Toggles */
+#aiToolsToggles {
+    /* Styles are inline in HTML for now for simplicity, can be moved here if more complex */
+    /* e.g., display: flex; align-items: center; margin-bottom: 8px; gap: 15px; flex-wrap: wrap; */
+}
+#aiToolsToggles div { /* Container for checkbox + label */
+    /* e.g., display: flex; align-items: center; */
+}
+#aiToolsToggles input[type="checkbox"] {
+    /* e.g., margin-right: 4px; */
+    vertical-align: middle;
+}
+#aiToolsToggles label {
+    font-size: 0.85em;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-block; /* To allow vertical-align with checkbox */
+    margin-bottom: 0; /* Override general label margin */
+    font-weight: normal; /* Override general label font-weight */
+    vertical-align: middle;
+}
+
+/* AI Grounding Results Display */
+#aiGroundingResultsDiv {
+    /* Styles are inline in HTML, can be moved here */
+    /* e.g. 
+    margin-top: 8px; 
+    font-size: 0.8em; 
+    display: none; 
+    padding: 8px; 
+    border: 1px solid var(--input-border-color); 
+    border-radius: 4px; 
+    background-color: var(--graph-bg-color); 
+    max-height: 100px; 
+    overflow-y: auto; 
+    */
+}
+#aiGroundingResultsDiv h6 {
+    margin-top: 0;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+#aiGroundingResultsDiv ul {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin: 0;
+}
+#aiGroundingResultsDiv li {
+    margin-bottom: 3px;
+    word-break: break-all;
+}
+#aiGroundingResultsDiv a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+#aiGroundingResultsDiv a:hover {
+    text-decoration: underline;
+}
+
+
+/* --- AI Lab Panel --- */
+#aiLabPanel .control-section ul {
+    padding-left: 20px;
+    margin-top: 5px;
+}
+#aiLabPanel .control-section li {
+    margin-bottom: 4px;
+}
+
+#aiTemplateEditorTextArea {
+    /* Style already defined in index.html, but ensure it has good defaults if that's removed */
+    /* width: calc(100% - 16px); is in HTML, good for here too */
+    /* min-height: 200px; is in HTML */
+    /* font-family: "SF Mono", "Consolas", "Menlo", monospace; */
+    /* border: 1px solid var(--input-border-color); */
+    /* border-radius: 4px; */
+    /* padding: 8px; */
+    /* background-color: var(--graph-bg-color); */
+    /* color: var(--text-color); */
+    /* resize: vertical; */
+}
+
+#aiTemplateSaveButton svg {
+    width: 1.9em;
+    height: 1.9em;
+    fill: var(--icon-success-color);
+}
+
+
+/* --- Custom Confirmation/Prompt Dialog --- */
+#customConfirmOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#customConfirmDialog {
+    background-color: var(--overlay-bg-color);
+    padding: 20px 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    min-width: 300px;
+    max-width: 90%;
+    text-align: center;
+    border: 1px solid var(--overlay-border-color);
+}
+
+#customConfirmMessage {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.05em;
+    line-height: 1.5;
+    color: var(--text-color);
+    white-space: pre-wrap;
+}
+
+/* Input field for custom prompt */
+#customPromptInput {
+    /* Styles are inlined in HTML for now, can be moved here for better organization */
+    /* e.g., 
+    width: calc(100% - 20px); 
+    margin-bottom: 15px; 
+    padding: 8px; 
+    border: 1px solid var(--input-border-color); 
+    border-radius: 4px; 
+    background-color: var(--graph-bg-color); 
+    color: var(--text-color); 
+    font-size: 0.9em; 
+    box-sizing: border-box;
+    */
+}
+
+
+#customConfirmButtons button {
+    padding: 8px 16px;
+    min-width: 80px;
+    margin: 0 8px;
+    margin-top: 0;
+}
+
+/* Default style for OK/Confirm button (neutral) */
+#customConfirmButtons button#customConfirmOkButton {
+    background-color: var(--button-bg-color); /* Use default button color */
+    border-color: var(--button-border-color);
+    color: var(--text-color);
+}
+#customConfirmButtons button#customConfirmOkButton:hover {
+    background-color: var(--button-hover-bg-color);
+    border-color: var(--button-hover-border-color);
+}
+
+/* Destructive style for OK/Confirm button */
+#customConfirmButtons button#customConfirmOkButton.confirm-ok-destructive {
+    background-color: var(--error-bg-color);
+    border-color: var(--error-border-color);
+    color: var(--error-text-color);
+}
+#customConfirmButtons button#customConfirmOkButton.confirm-ok-destructive:hover {
+    background-color: var(--error-border-color); /* Darken on hover */
+    color: var(--bg-color); /* Adjust text color for contrast if needed */
+}
+body.dark-mode #customConfirmButtons button#customConfirmOkButton.confirm-ok-destructive:hover {
+    color: var(--text-color);
+}
+
+
+#customConfirmButtons button#customConfirmCancelButton {
+    background-color: var(--button-bg-color);
+    border-color: var(--button-border-color);
+    color: var(--text-color);
+}
+#customConfirmButtons button#customConfirmCancelButton:hover {
+    background-color: var(--button-hover-bg-color);
+}
+
+/* --- API Key & Supabase Modals --- */
+#apiKeyModalOverlay, #supabaseSetupModalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    display: none; /* Controlled by JS */
+    align-items: center;
+    justify-content: center;
+}
+
+#apiKeyModalDialog, #supabaseSetupModalDialog {
+    background-color: var(--overlay-bg-color);
+    padding: 20px 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    min-width: 350px;
+    max-width: 550px;
+    text-align: left;
+    border: 1px solid var(--overlay-border-color);
+}
+
+#apiKeyModalDialog h4, #supabaseSetupModalDialog h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-color);
+}
+
+#apiKeyModalDialog p, #supabaseSetupModalDialog p {
+    font-size: 0.9em;
+    line-height: 1.5;
+    margin-bottom: 15px;
+    color: var(--text-color);
+}
+
+#apiKeyModalDialog a, #supabaseSetupModalDialog a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+#apiKeyModalDialog a:hover, #supabaseSetupModalDialog a:hover {
+    text-decoration: underline;
+}
+
+#apiKeyInput, #supabaseUrlInput, #supabaseKeyInput {
+    width: calc(100% - 22px); /* Account for padding and border */
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    font-size: 1em;
+}
+
+#supabaseSetupModalDialog label {
+    margin-bottom: 5px;
+}
+#supabaseSetupModalDialog input {
+    margin-bottom: 15px;
+}
+#supabaseSetupModalDialog input:last-of-type {
+    margin-bottom: 20px;
+}
+#supabaseSetupModalDialog pre {
+    font-size: 0.85em;
+}
+
+#apiKeyModalButtons, #supabaseModalButtons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#apiKeyModalButtons > button, #supabaseModalButtons > button {
+    margin: 0;
+}
+#apiKeyModalButtons #apiKeyProceedWithoutButton, #supabaseModalButtons #supabaseCancelButton {
+    background-color: transparent;
+    border: none;
+    color: var(--link-color);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.9em;
+    text-decoration: underline;
+}
+#apiKeyModalButtons #apiKeyProceedWithoutButton:hover, #supabaseModalButtons #supabaseCancelButton:hover {
+    color: var(--text-color);
+    background-color: transparent; /* Override button hover */
+    border: none;
+}
+#supabaseModalButtons #supabaseCancelButton {
+    color: var(--error-text-color);
+}
+
+
+/* API Key Section in AI Panel */
+#apiKeySection p {
+    margin: 0 0 8px 0;
+    font-size: 0.9em;
+    font-style: italic;
+    opacity: 0.8;
+}
+#apiKeySection button {
+    margin-top: 0;
+}
+
+
+/* --- Cloud Storage Section --- */
+.cloud-storage-inline-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.cloud-storage-inline-group label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.cloud-storage-inline-group input[type="number"] {
+    padding: 7px 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    font-size: 0.9em;
+    box-sizing: border-box;
+    -moz-appearance: textfield;
+}
+.cloud-storage-inline-group input[type="number"]::-webkit-outer-spin-button,
+.cloud-storage-inline-group input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+
+.cloud-storage-inline-group button {
+    margin-top: 0;
+    margin-right: 0;
+    padding: 7px 10px;
+}
+.cloud-storage-inline-group button:last-child {
+    margin-right: 0;
+}
+
+#storageKeyInput {
+}
+
+
+.cloud-status-message {
+    font-size: 0.85em;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-style: solid;
+    display: none;
+    word-break: break-word; /* Ensure long messages wrap */
+    white-space: normal; /* Ensure wrapping for long messages */
+}
+
+.cloud-status-message.success {
+    color: var(--success-text-color);
+    background-color: var(--success-bg-color);
+    border-color: var(--success-border-color);
+}
+
+.cloud-status-message.error {
+    color: var(--error-text-color);
+    background-color: var(--error-bg-color);
+    border-color: var(--error-border-color);
+}
+
+/* --- Auto-Sync Indicator --- */
+.auto-sync-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-color: var(--warning-color);
+    border-radius: 50%;
+    margin-left: 4px;
+    vertical-align: middle; /* Align with checkbox/label text */
+    box-shadow: 0 0 3px var(--warning-color);
+    cursor: help; /* Indicate it's hoverable for a tooltip */
+}
+.auto-sync-indicator::before {
+    content: "⚠️"; /* Using emoji as content */
+    font-size: 0.7em; /* Adjust emoji size */
+    color: black; /* Make emoji visible on yellow bg */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    line-height: 1; /* Ensure emoji is centered vertically */
+}
+
+body.dark-mode .auto-sync-indicator {
+    background-color: var(--warning-color); /* Use the dark mode warning color for bg */
+    box-shadow: 0 0 3px var(--warning-color);
+}
+
+body.dark-mode .auto-sync-indicator::before {
+    color: black; /* Keep emoji black for contrast on lighter yellow */
+}
+#sunburstControls button {
+    padding: 6px 10px;
+    margin: 0; /* Override general button margin */
+}
+#sunburstControls button svg {
+    width: 1.6em;
+    height: 1.6em;
+}
+
+/* --- Sunburst Filter Panel (Bottom Center) --- */
+#sunburstFilterPanel {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background-color: var(--overlay-bg-color);
+    padding: 10px 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border: 1px solid var(--overlay-border-color);
+    display: flex; /* Changed to flex for horizontal layout */
+    gap: 20px; /* Space between groups */
+    align-items: flex-start; /* Align groups to the top */
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.filter-panel-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.filter-panel-group.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.filter-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--section-border-color);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
+.filter-group-header h5 {
+    margin: 0;
+    font-size: 0.9em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.toggle-all-container {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.toggle-all-container .toggle-all-label {
+    font-size: 0.8em;
+    font-weight: normal;
+    text-transform: lowercase;
+    margin-left: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-all-container .toggle-all-checkbox {
+    cursor: pointer;
+}
+
+.filter-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    white-space: nowrap;
+}
+
+.filter-item input[type="checkbox"] {
+    margin-right: 6px;
+    cursor: pointer;
+}
+
+.filter-item label {
+    font-size: 0.85em;
+    font-weight: normal;
+    cursor: pointer;
+    user-select: none;
+    text-transform: capitalize;
+}
