@@ -2,11 +2,11 @@
 // Fix: Import GoogleGenAI correctly as per guidelines
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 // Fix: Import GenerateContentParameters instead of GenerateContentRequest
-import type { GenerateContentParameters } from '@google/genai'; // Removed ListModelsResponse as it's not used
+import type { GenerateContentParameters, Content } from '@google/genai'; // Removed ListModelsResponse as it's not used
 
 import {
     inputTextElem, renderButton, aiChatHistoryDiv, aiPromptInputElem,
-    sendAiPromptButton, aiLoadingIndicator, aiModelSelector, importChatInput, errorDisplay,
+    sendAiPromptButton, cancelAiPromptButton, aiLoadingIndicator, aiModelSelector, importChatInput, errorDisplay,
     toggleControlsButton,
     controlsOverlay,
     aiLabErrorDisplay,
@@ -15,7 +15,15 @@ import {
     detailsNodeSuggestAiButton, detailsNodeAiLoadingIndicator,
     detailsNodeEditTextArea,
     searchGroundingToggle, urlContextToggle, aiGroundingResultsDiv,
-    apiKeyModalOverlay, apiKeyInput, apiKeySaveButton, apiKeyProceedWithoutButton, setApiKeyButton, apiKeySection, detailsNodeSuggestionTaskSelector
+    apiKeyModalOverlay,
+    detailsNodeSuggestionTaskSelector,
+    apiKeySection,
+    apiKeyInitialSetupSection,
+    apiKeyManageSection,
+    apiKeyUnsetButton,
+    apiKeyProceedWithoutButton,
+    apiKeyInput,
+    apiKeySaveButton
 } from './dom.js';
 import { ChatMessage, ExportData } from './types.js';
 import {
@@ -31,7 +39,11 @@ import {
     DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME, DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_LINK_REWRITER,
     DEFAULT_TEMPLATE_PREFIX_SUGGEST_EDIT,
     DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME,
-    DEFAULT_TEMPLATE_CONTENT_SEARCH_GROUNDING_RULES
+    DEFAULT_TEMPLATE_CONTENT_SEARCH_GROUNDING_RULES,
+    DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME,
+    DEFAULT_TEMPLATE_CONTENT_SYSTEM_URL_RESOLVER,
+    DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME, DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_PAIR,
+    DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME, DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_SINGLE
 } from './ai-config.js';
 import { ICON_GEAR} from './icons.js';
 import { addError as addMainPanelError, clearErrors as clearMainPanelErrors, selectDefaultModel, parseJsonFromText, showCustomConfirmDialog, getComputedCssVar } from './utils.js';
@@ -53,6 +65,8 @@ let aiRequestStartTime: number | null = null;
 let chatHistoryForExport: ChatMessage[] = [];
 let modelsFetched = false;
 let isAIProcessingFlag: boolean = false;
+let activeAiRequestToken: symbol | null = null;
+let lastUserPrompt: string | null = null;
 
 // AI Templates
 let aiTemplates: Map<string, string> = new Map();
@@ -80,6 +94,15 @@ export interface EditSuggestionContext {
     CURRENT_NODE_TEXT: string;
     CONNECTED_NODES_INFO: string;
     WIKIDATA_API_RESULTS?: string;
+}
+
+// New context interface for contextual text suggestion
+export interface ContextualTextSuggestionContext {
+    SUBJECT_DP_TEXT: string;
+    OBJECT_DP_TEXT: string;
+    PREDICATE_PHRASE: string;
+    SIDE_TO_GENERATE?: 'subject' | 'object'; // Optional: for single suggestion
+    OTHER_SIDE_CONTEXT?: string; // Optional: for single suggestion
 }
 
 
@@ -119,6 +142,9 @@ export async function initializeAiTemplates(): Promise<void> {
     aiTemplates.set(DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_TERM_EXTRACTION_NAME, DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_TERM_EXTRACTION);
     aiTemplates.set(DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME, DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_LINK_REWRITER);
     aiTemplates.set(DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME, DEFAULT_TEMPLATE_CONTENT_SEARCH_GROUNDING_RULES);
+    aiTemplates.set(DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME, DEFAULT_TEMPLATE_CONTENT_SYSTEM_URL_RESOLVER);
+    aiTemplates.set(DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME, DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_PAIR);
+    aiTemplates.set(DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME, DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_SINGLE);
 
 
     if (loadedTemplates) {
@@ -150,7 +176,10 @@ export async function deleteTemplate(templateName: string): Promise<boolean> {
         DEFAULT_TEMPLATE_SYSTEM_PRESERVE_REFERENCES_HINT_NAME === templateName ||
         DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_TERM_EXTRACTION_NAME === templateName ||
         DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME === templateName ||
-        DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME === templateName;
+        DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME === templateName ||
+        DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME === templateName ||
+        DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME === templateName ||
+        DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME === templateName;
 
     if (isCoreDefault) {
         let revertedContent = "";
@@ -164,6 +193,9 @@ export async function deleteTemplate(templateName: string): Promise<boolean> {
         else if (templateName === DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_TERM_EXTRACTION_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_TERM_EXTRACTION;
         else if (templateName === DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_LINK_REWRITER;
         else if (templateName === DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SEARCH_GROUNDING_RULES;
+        else if (templateName === DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_URL_RESOLVER;
+        else if (templateName === DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_PAIR;
+        else if (templateName === DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME) revertedContent = DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_SINGLE;
         aiTemplates.set(templateName, revertedContent);
     } else {
         aiTemplates.delete(templateName);
@@ -205,6 +237,9 @@ function resolveTemplate(
         else if (templateName === DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_TERM_EXTRACTION_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_TERM_EXTRACTION;
         else if (templateName === DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_WIKIDATA_LINK_REWRITER;
         else if (templateName === DEFAULT_TEMPLATE_SEARCH_GROUNDING_RULES_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SEARCH_GROUNDING_RULES;
+        else if (templateName === DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SYSTEM_URL_RESOLVER;
+        else if (templateName === DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_PAIR;
+        else if (templateName === DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME) coreDefaultContent = DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_SINGLE;
 
         if (coreDefaultContent !== null) {
             content = coreDefaultContent;
@@ -239,7 +274,8 @@ function resolveTemplate(
 function startAiRequestIndicator(): void {
     isAIProcessingFlag = true;
     if (aiLoadingIndicator) aiLoadingIndicator.style.display = 'flex';
-    if (sendAiPromptButton) sendAiPromptButton.disabled = true;
+    if (sendAiPromptButton) sendAiPromptButton.style.display = 'none';
+    if (cancelAiPromptButton) cancelAiPromptButton.style.display = 'block';
     if (toggleControlsButton) {
         toggleControlsButton.innerHTML = `<div class="spinner"></div>`;
         toggleControlsButton.title = 'AI is processing...';
@@ -259,7 +295,11 @@ function stopAiRequestIndicator(): void {
         aiLoadingIndicator.style.display = 'none';
         aiLoadingIndicator.textContent = 'AI is thinking...';
     }
-    if (sendAiPromptButton) sendAiPromptButton.disabled = false;
+    if (sendAiPromptButton) {
+        sendAiPromptButton.style.display = 'block';
+        sendAiPromptButton.disabled = false;
+    }
+    if (cancelAiPromptButton) cancelAiPromptButton.style.display = 'none';
     if (toggleControlsButton) {
         toggleControlsButton.innerHTML = ICON_GEAR;
         const isVisible = controlsOverlay ? !controlsOverlay.classList.contains('hidden') : true;
@@ -294,12 +334,34 @@ function appendMessageToChatUI(message: ChatMessage): void {
 }
 
 // --- API Key Management ---
-export function showApiKeyModal() {
-    if (apiKeyModalOverlay) apiKeyModalOverlay.style.display = 'flex';
+export function hideApiKeyModal() {
+    if (apiKeyModalOverlay) apiKeyModalOverlay.style.display = 'none';
 }
 
-function hideApiKeyModal() {
-    if (apiKeyModalOverlay) apiKeyModalOverlay.style.display = 'none';
+export function showApiKeyModal() {
+    if (!apiKeyModalOverlay) return;
+
+    const keyIsSet = isAiInitialized();
+
+    if (apiKeyInitialSetupSection) apiKeyInitialSetupSection.style.display = keyIsSet ? 'none' : 'block';
+    if (apiKeyManageSection) apiKeyManageSection.style.display = keyIsSet ? 'block' : 'none';
+    if (apiKeyUnsetButton) apiKeyUnsetButton.style.display = keyIsSet ? 'inline-block' : 'none';
+    if (apiKeyProceedWithoutButton) apiKeyProceedWithoutButton.style.display = keyIsSet ? 'none' : 'inline-block';
+    
+    if (apiKeyInput) apiKeyInput.value = '';
+
+    // Set initial button state when opening modal
+    if (apiKeySaveButton) {
+        if (keyIsSet) {
+            apiKeySaveButton.textContent = 'Close';
+            apiKeySaveButton.disabled = false; // Always enabled in manage mode to allow closing
+        } else {
+            apiKeySaveButton.textContent = 'Save Key';
+            apiKeySaveButton.disabled = true; // Disabled until user types a key
+        }
+    }
+
+    apiKeyModalOverlay.style.display = 'flex';
 }
 
 export async function saveApiKeyAndReload(key: string): Promise<void> {
@@ -331,13 +393,33 @@ export async function proceedWithoutAiAndReload(): Promise<void> {
     }
 }
 
+export async function unsetApiKeyAndReload(): Promise<void> {
+    try {
+        localStorage.removeItem(LOCAL_STORAGE_API_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_API_CHOICE);
+        localApiKey = null;
+        genAI = null; // De-initialize
+        modelsFetched = false; // Allow models to be re-evaluated
+        hideApiKeyModal();
+        await initializeAiService(); // This will re-trigger the modal logic
+    } catch (e) {
+        console.error("Could not unset API key from local storage:", e);
+        // Even if storage fails, try to de-initialize
+        localApiKey = null;
+        genAI = null;
+        modelsFetched = false;
+        hideApiKeyModal();
+        await initializeAiService();
+    }
+}
+
 function disableAiFeatures() {
     console.warn("AI features disabled.");
-    if (aiModelSelector) aiModelSelector.disabled = true;
-    if (sendAiPromptButton) sendAiPromptButton.disabled = true;
-    if (aiPromptInputElem) aiPromptInputElem.disabled = true;
-    if (searchGroundingToggle) searchGroundingToggle.disabled = true;
-    if (urlContextToggle) urlContextToggle.disabled = true;
+        if (aiModelSelector) aiModelSelector.disabled = true;
+        if (sendAiPromptButton) sendAiPromptButton.disabled = true;
+        if (aiPromptInputElem) aiPromptInputElem.disabled = true;
+        if (searchGroundingToggle) searchGroundingToggle.disabled = true;
+        if (urlContextToggle) urlContextToggle.disabled = true;
     if (acnnSuggestAiButton) acnnSuggestAiButton.style.visibility = 'hidden';
     if (detailsNodeSuggestAiButton) detailsNodeSuggestAiButton.style.visibility = 'hidden';
     if (detailsNodeSuggestionTaskSelector) detailsNodeSuggestionTaskSelector.style.visibility = 'hidden';
@@ -360,6 +442,10 @@ function enableAiFeatures() {
 
 // --- Core AI Service Functions ---
 export async function initializeAiService(): Promise<void> {
+    // FIX: Always load templates at the start, regardless of AI status,
+    // so the AI Lab panel can be populated correctly.
+    await initializeAiTemplates();
+
     let choice: string | null = null;
     try {
         choice = localStorage.getItem(LOCAL_STORAGE_API_CHOICE);
@@ -368,6 +454,16 @@ export async function initializeAiService(): Promise<void> {
     }
 
     if (!choice) {
+        // Configure modal for initial setup before showing
+        if (apiKeyInitialSetupSection) apiKeyInitialSetupSection.style.display = 'block';
+        if (apiKeyManageSection) apiKeyManageSection.style.display = 'none';
+        if (apiKeyUnsetButton) apiKeyUnsetButton.style.display = 'none';
+        if (apiKeyProceedWithoutButton) apiKeyProceedWithoutButton.style.display = 'inline-block';
+        if (apiKeyInput) apiKeyInput.value = '';
+        if (apiKeySaveButton) {
+            apiKeySaveButton.textContent = 'Save Key';
+            apiKeySaveButton.disabled = true;
+        }
         showApiKeyModal();
         disableAiFeatures(); // Disable features until a choice is made
         return;
@@ -395,14 +491,13 @@ export async function initializeAiService(): Promise<void> {
         }
 
         // Key is present, try to initialize
-        if (!genAI) {
-            try {
+    if (!genAI) {
+        try {
                 genAI = new GoogleGenAI({ apiKey: localApiKey });
                 console.log("AI Service Initialized with GoogleGenAI using stored key.");
                 enableAiFeatures();
-                await populateModelsIfNotLoaded();
-                await initializeAiTemplates();
-            } catch (error) {
+            await populateModelsIfNotLoaded();
+        } catch (error) {
                 console.error("Failed to initialize GoogleGenAI with stored key:", error);
                 genAI = null;
                 addMainPanelError(`Failed to initialize AI Service with stored key: ${error instanceof Error ? error.message : String(error)}. Please check the key.`);
@@ -412,7 +507,6 @@ export async function initializeAiService(): Promise<void> {
              // Already initialized
              enableAiFeatures();
              await populateModelsIfNotLoaded();
-             await initializeAiTemplates();
         }
     }
 }
@@ -515,10 +609,9 @@ async function processGroundedResponse(responseText: string, groundingMetadata: 
     const references: { dpText: string, refNumber: number, id: string }[] = [];
     const refNumberToDpId = new Map<number, string>();
 
-    // Step 1: Extract References to create Reference DPs.
+    // Step 1: Extract References to create a master list of potential Reference DPs.
     const groundingChunks = groundingMetadata?.groundingChunks;
     if (groundingChunks && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
-        // Use metadata as the source of truth
         const refPromises = groundingChunks.map(async (chunk: any, index: number) => {
             if (chunk.web && chunk.web.uri) {
                 const refNumber = index + 1;
@@ -532,7 +625,6 @@ async function processGroundedResponse(responseText: string, groundingMetadata: 
         });
         await Promise.all(refPromises);
     } else {
-        // Fallback to parsing text if metadata is missing or empty
         const refSectionRegex = /#\s*References\s*([\s\S]*)/;
         const refSectionMatch = responseText.match(refSectionRegex);
         if (refSectionMatch) {
@@ -557,55 +649,59 @@ async function processGroundedResponse(responseText: string, groundingMetadata: 
         }
     }
 
-    // Step 2: Clean the original response to remove the AI's potentially malformed reference section.
-    const originalLines = responseText.split('\n');
+    // Step 2: Aggressively clean the original response to remove ALL potential reference-related generated content.
+    // This ensures we have a clean slate to rebuild from.
     const refSectionHeaderRegex = /^#\s*References/i;
-    let refSectionStartIndex = -1;
-    for (let i = 0; i < originalLines.length; i++) {
-        if (refSectionHeaderRegex.test(originalLines[i].trim())) {
-            refSectionStartIndex = i;
-            break;
-        }
-    }
-    const contentLines = refSectionStartIndex === -1 ? originalLines : originalLines.slice(0, refSectionStartIndex);
-    const cleanedContent = contentLines.join('\n');
+    const refDpRegex = /^\s*DPRef\d+\.reference:/;
+    const citesConnectionRegex = /^\s*\((?:DP\S+\s+cites\s+DPRef\S+)|(?:DPRef\S+\s+isCitedBy\s+DP\S+)\)/; // Handles both directions
 
-    // Step 3: Find citations in the cleaned content and generate connections.
+    const contentLines = responseText.split('\n').filter(line => {
+        const trimmedLine = line.trim();
+        return !refSectionHeaderRegex.test(trimmedLine) &&
+               !refDpRegex.test(trimmedLine) &&
+               !citesConnectionRegex.test(trimmedLine) &&
+               !/^\s*\[\d+\]/.test(trimmedLine); // Heuristic for reference list items
+    });
+    const cleanedContentWithCitations = contentLines.join('\n');
+
+
+    // Step 3: Find citations in the cleaned content to determine which references are actually used.
     const newCiteConnections = new Set<string>();
+    const usedRefDpIds = new Set<string>();
     const citationRegex = /\[([\d,\s]+)\]/g;
-    const dpRegex = /^DP(_?[\w-]+)((?:\.[a-zA-Z]+)?):\s*(.*)/;
+    const dpIdRegex = /^DP(\S+?)\s*:/; // Matches DP ID at the start of a line
 
-    cleanedContent.split('\n').forEach(line => {
-        const dpMatch = line.match(dpRegex);
+    cleanedContentWithCitations.split('\n').forEach(line => {
+        const dpMatch = line.trim().match(dpIdRegex);
         if (dpMatch) {
-            const dpId = dpMatch[1]; // Correctly captures just the ID part, e.g., "_1" or "MyID"
-            const textPart = dpMatch[3];
+            const dpId = dpMatch[1].split('.')[0]; // Get ID like '1_a' from '1_a.statement'
             let citationMatch;
-            while ((citationMatch = citationRegex.exec(textPart)) !== null) {
+            while ((citationMatch = citationRegex.exec(line)) !== null) {
                 const numbersStr = citationMatch[1];
                 const numbers = numbersStr.split(',').map(n => parseInt(n.trim(), 10)).filter(num => !isNaN(num));
                 for (const num of numbers) {
                     if (refNumberToDpId.has(num)) {
-                        const refDpId = refNumberToDpId.get(num)!; // Correctly gets "Ref1"
+                        const refDpId = refNumberToDpId.get(num)!;
                         newCiteConnections.add(`(DP${dpId} cites DP${refDpId})`);
+                        usedRefDpIds.add(refDpId);
                     }
                 }
             }
         }
     });
 
-    // Step 4: Assemble the final structure, removing citations from the original DP text.
-    const finalContentLines = cleanedContent.split('\n').map(line => line.replace(citationRegex, '').trimEnd());
-    let finalStructure = finalContentLines.join('\n').trim();
-
-    if (references.length > 0) {
-        const referenceDps = references.sort((a, b) => a.refNumber - b.refNumber).map(r => r.dpText);
-        if (finalStructure) {
-            finalStructure += '\n\n';
-        }
-        finalStructure += [
+    // Step 4: Assemble the final structure.
+    const finalContent = cleanedContentWithCitations.replace(citationRegex, '').trim();
+    const usedReferenceDps = references
+        .filter(ref => usedRefDpIds.has(ref.id))
+        .sort((a, b) => a.refNumber - b.refNumber)
+        .map(r => r.dpText);
+    
+    let finalStructure = finalContent;
+    if (usedReferenceDps.length > 0) {
+        finalStructure += '\n\n' + [
             '# Auto-generated from grounding data',
-            ...referenceDps,
+            ...usedReferenceDps,
             ...Array.from(newCiteConnections)
         ].join('\n').trim();
     }
@@ -613,6 +709,38 @@ async function processGroundedResponse(responseText: string, groundingMetadata: 
     return finalStructure;
 }
 
+
+export async function cancelCurrentAiRequest(): Promise<void> {
+    console.log("Cancelling AI request...");
+    activeAiRequestToken = null;
+
+    if (aiPromptInputElem && lastUserPrompt) {
+        aiPromptInputElem.value = lastUserPrompt;
+        lastUserPrompt = null;
+    }
+
+    if (chatHistoryForExport.length > 0) {
+        const lastMessage = chatHistoryForExport[chatHistoryForExport.length - 1];
+        if (lastMessage.type === 'user') {
+            chatHistoryForExport.pop();
+        }
+    }
+
+    if (aiChatHistoryDiv && aiChatHistoryDiv.lastElementChild) {
+        const lastMessageElement = aiChatHistoryDiv.lastElementChild as HTMLElement;
+        if (lastMessageElement.classList.contains('user-message')) {
+            aiChatHistoryDiv.removeChild(lastMessageElement);
+        }
+    }
+    
+    stopAiRequestIndicator();
+    
+    const cancelMessage = "Request cancelled.";
+    appendMessageToChatUI({ text: cancelMessage, type: 'ai' });
+    chatHistoryForExport.push({ text: cancelMessage, type: 'ai' });
+    
+    await saveAiChatHistory(chatHistoryForExport);
+}
 
 export async function sendPromptToAI(): Promise<void> {
     if (!genAI || !aiPromptInputElem || !inputTextElem || !aiModelSelector) {
@@ -630,6 +758,10 @@ export async function sendPromptToAI(): Promise<void> {
         addMainPanelError("Please select a valid AI model.");
         return;
     }
+
+    const requestToken = Symbol('aiRequest');
+    activeAiRequestToken = requestToken;
+    lastUserPrompt = userPrompt;
 
     appendMessageToChatUI({ text: userPrompt, type: 'user' });
     chatHistoryForExport.push({ text: userPrompt, type: 'user' });
@@ -658,13 +790,13 @@ export async function sendPromptToAI(): Promise<void> {
         }
         if (urlContextToggle && urlContextToggle.checked) {
             // Placeholder for future URL context tool
-            // tools.push({urlContext: {}});
-            console.warn("URL Context feature is not yet implemented.");
+            tools.push({urlContext: {}});
+            //console.warn("URL Context feature is not yet implemented.");
         }
         
         const requestConfig: GenerateContentParameters = {
             model: selectedModel,
-            contents: userPromptContent,
+            contents: [{ role: "user", parts: [{text: userPromptContent}] }],
             config: {
                 systemInstruction: systemPromptText
             }
@@ -675,6 +807,12 @@ export async function sendPromptToAI(): Promise<void> {
         }
         
         const response: GenerateContentResponse = await genAI.models.generateContent(requestConfig);
+
+        if (activeAiRequestToken !== requestToken) {
+            console.log("AI response received, but request was cancelled or superseded. Ignoring response.");
+            return;
+        }
+
         const aiResponseText = response.text;
 
         if (!aiResponseText) {
@@ -684,13 +822,41 @@ export async function sendPromptToAI(): Promise<void> {
         let processedStructure = aiResponseText;
         const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
 
-        // If the user intended to use grounding, check for API metadata.
-        // This is the most reliable signal that grounding was actually used.
-        // processGroundedResponse will then handle the fallback from chunks to text parsing internally.
         if (searchGroundingToggle.checked && groundingMetadata) {
             console.log("Grounding toggle is on and grounding metadata found in response. Processing for references...");
-            console.log("Grounding Metadata Object:", groundingMetadata); // For debugging
             processedStructure = await processGroundedResponse(aiResponseText, groundingMetadata);
+        }
+        
+        // Fallback: Use AI to resolve any remaining redirect URLs
+        const unresolvedLinkPattern = /https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\//;
+        if (unresolvedLinkPattern.test(processedStructure)) {
+            console.log("Unresolved grounding links found after initial processing. Attempting AI-based resolution.");
+            appendMessageToChatUI({ text: "Resolving citation links...", type: 'ai' });
+            chatHistoryForExport.push({ text: "Resolving citation links...", type: 'ai' });
+
+            const resolverPrompt = resolveTemplate(
+                DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME,
+                new Set(),
+                { TEXT_WITH_URLS: processedStructure }
+            );
+
+            if (resolverPrompt.startsWith("[ERROR:")) {
+                throw new Error(`Template Error (URL Resolver): ${resolverPrompt}`);
+            }
+
+            const resolverResponse = await genAI.models.generateContent({ model: selectedModel, contents: resolverPrompt });
+            const resolvedText = resolverResponse.text;
+            
+            if (resolvedText && resolvedText.trim()) {
+                // AI may wrap output in a markdown block
+                const fenceRegex = /^```(?:\w*\n)?([\s\S]*?)\n?```$/;
+                const match = resolvedText.trim().match(fenceRegex);
+                processedStructure = match ? match[1].trim() : resolvedText.trim();
+                console.log("AI-based link resolution complete.");
+            } else {
+                console.warn("AI URL resolver returned empty response. Links may remain unresolved.");
+                addMainPanelError("Warning: AI could not resolve some citation links.");
+            }
         }
 
         currentAiGeneratedStructure = processedStructure;
@@ -724,16 +890,29 @@ export async function sendPromptToAI(): Promise<void> {
             aiGroundingResultsDiv.style.display = 'block';
         }
 
-
         await saveAiChatHistory(chatHistoryForExport);
+        
+        // This request is now fully handled, so stop the indicator.
+        stopAiRequestIndicator();
+        // Nullify the token to signify that no request is currently active.
+        activeAiRequestToken = null;
+
     } catch (error: any) {
+        if (activeAiRequestToken !== requestToken) {
+            console.log("AI request failed after being cancelled or superseded. Ignoring error.");
+            return;
+        }
+
+        // This request is now fully handled (with an error), so stop the indicator.
+        stopAiRequestIndicator();
+        // Nullify the token to signify that no request is currently active.
+        activeAiRequestToken = null;
+
         console.error("Error sending prompt to AI:", error);
         const errorMessage = error.message || "An unknown error occurred with the AI.";
         appendMessageToChatUI({ text: `Error: ${errorMessage}`, type: 'ai' });
         chatHistoryForExport.push({ text: `Error: ${errorMessage}`, type: 'ai' });
         addMainPanelError(`AI Error: ${errorMessage}`);
-    } finally {
-        stopAiRequestIndicator();
     }
 }
 
@@ -877,7 +1056,7 @@ export async function clearChatAndAIServiceState(confirm: boolean = true): Promi
     }
 }
 
-function constructSuggestionPrompt(templateName: string, context: SuggestionContext | EditSuggestionContext): string {
+function constructSuggestionPrompt(templateName: string, context: SuggestionContext | EditSuggestionContext | ContextualTextSuggestionContext): string {
     const resolvedTemplate = resolveTemplate(templateName, new Set(), (context as unknown) as Record<string, string>);
     if (resolvedTemplate.startsWith("[ERROR:")) {
         throw new Error(`Template Error (${templateName}): ${resolvedTemplate}`);
@@ -1036,58 +1215,109 @@ export async function suggestNodeTextEditViaAI(
     }
     const selectedModel = aiModelSelector.value;
     if (!selectedModel || selectedModel === "No models available") {
-        addMainPanelError("Please select a valid AI model for edit suggestion.");
-        onProgress("AI model not selected.");
+        addMainPanelError("Please select a valid model for suggestion.");
+        onProgress("No valid model selected.");
         return null;
     }
 
-    try {
-        if (templateName === DEFAULT_TEMPLATE_SUGGEST_EDIT_WIKIDATA_LINK_NAME) {
-            // Multi-step process for Wikidata linking
-            const termsToSearch = await wikidataTermExtraction(context.CURRENT_NODE_TEXT, context.CONNECTED_NODES_INFO, selectedModel, onProgress);
-            if (!termsToSearch || termsToSearch.length === 0) {
-                 // Message already set by wikidataTermExtraction's onProgress
-                return null; // Or return original text if no terms found
-            }
+    if (templateName === DEFAULT_TEMPLATE_SUGGEST_EDIT_WIKIDATA_LINK_NAME) {
+        // Multi-step process for Wikidata
+        const terms = await wikidataTermExtraction(context.CURRENT_NODE_TEXT, context.CONNECTED_NODES_INFO, selectedModel, onProgress);
+        if (!terms || terms.length === 0) {
+            return context.CURRENT_NODE_TEXT; // Return original text if no terms found
+        }
+        
+        const searchResults = await searchWikidata(terms, onProgress);
+        if (!searchResults || searchResults.length === 0) {
+             return context.CURRENT_NODE_TEXT; // Return original if search fails or yields nothing
+        }
+        const searchResultsJson = JSON.stringify(searchResults);
+        
+        const rewrittenText = await wikidataLinkRewriter(context.CURRENT_NODE_TEXT, context.CONNECTED_NODES_INFO, searchResultsJson, selectedModel, onProgress);
+        return rewrittenText; // Can be null if the rewriter fails
 
-            const apiSearchResults = await searchWikidata(termsToSearch, onProgress);
-            if (!apiSearchResults) {
-                // Message already set by searchWikidata's onProgress
-                return null; // Or return original text
-            }
-            
-            const relevantApiResults = apiSearchResults.filter(r => r.apiResponse && r.apiResponse.search && r.apiResponse.search.length > 0);
-            if (relevantApiResults.length === 0) {
-                onProgress("No relevant results from Wikidata to use for rewriting.");
-                return context.CURRENT_NODE_TEXT; // Return original text if no usable API results
-            }
-
-            const wikidataApiResultsJson = JSON.stringify(relevantApiResults);
-            const finalRewrittenText = await wikidataLinkRewriter(context.CURRENT_NODE_TEXT, context.CONNECTED_NODES_INFO, wikidataApiResultsJson, selectedModel, onProgress);
-            onProgress(""); // Clear progress message
-            return finalRewrittenText;
-
-        } else {
-            // Single-step process for other edit suggestions
-            onProgress("AI generating suggestion...");
+    } else {
+        // Single-step process for other templates
+        try {
+            onProgress("AI is thinking...");
             const prompt = constructSuggestionPrompt(templateName, context);
             const response: GenerateContentResponse = await genAI.models.generateContent({
                 model: selectedModel,
                 contents: prompt,
-                config: { temperature: 0.3 } // Adjust temperature as needed
+                config: { temperature: 0.3 } 
             });
+            onProgress(""); // Clear progress message
             const suggestion = response.text;
-             onProgress(""); // Clear progress message
             if (!suggestion) {
-                addMainPanelError("AI returned an empty suggestion for edit.");
+                addMainPanelError("AI returned an empty suggestion.");
                 return null;
             }
             return suggestion.trim();
+        } catch (error: any) {
+            console.error(`Error getting AI suggestion for edit task "${templateName}":`, error);
+            addMainPanelError(`AI Suggestion Error: ${error.message}`);
+            onProgress("Suggestion failed.");
+            return null;
         }
+    }
+}
+
+export async function suggestContextTextsForConnection(context: ContextualTextSuggestionContext): Promise<{ subjectContext: string; objectContext: string; } | null> {
+    if (!genAI || !aiModelSelector) {
+        addMainPanelError("AI Service not ready for suggestion.");
+        return null;
+    }
+    const selectedModel = aiModelSelector.value;
+    if (!selectedModel || selectedModel === "No models available") {
+        addMainPanelError("Please select a valid AI model for suggestion.");
+        return null;
+    }
+    try {
+        const prompt = constructSuggestionPrompt(DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME, context);
+        const response: GenerateContentResponse = await genAI.models.generateContent({
+            model: selectedModel,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        const jsonText = response.text;
+        if (!jsonText) throw new Error("Context suggestion returned empty response.");
+        const parsed = parseJsonFromText(jsonText);
+        if (typeof parsed.subjectContext === 'string' && typeof parsed.objectContext === 'string') {
+            return parsed;
+        }
+        throw new Error("Context suggestion did not return the expected JSON format.");
     } catch (error: any) {
-        console.error(`Error getting AI suggestion for edit (template ${templateName}):`, error);
-        addMainPanelError(`AI Edit Suggestion Error: ${error.message}`);
-        onProgress("Suggestion failed.");
+        console.error("Error getting AI suggestion for context text pair:", error);
+        addMainPanelError(`AI Context Suggestion Error: ${error.message}`);
+        return null;
+    }
+}
+
+export async function suggestSingleContextText(context: ContextualTextSuggestionContext): Promise<string | null> {
+    if (!genAI || !aiModelSelector) {
+        addMainPanelError("AI Service not ready for suggestion.");
+        return null;
+    }
+    const selectedModel = aiModelSelector.value;
+    if (!selectedModel || selectedModel === "No models available") {
+        addMainPanelError("Please select a valid AI model for suggestion.");
+        return null;
+    }
+    try {
+        const prompt = constructSuggestionPrompt(DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME, context);
+        const response: GenerateContentResponse = await genAI.models.generateContent({
+            model: selectedModel,
+            contents: prompt
+        });
+        const suggestion = response.text;
+        if (suggestion === null || suggestion === undefined) {
+             addMainPanelError("AI returned an empty suggestion for single context text.");
+            return null;
+        }
+        return suggestion.trim();
+    } catch (error: any) {
+        console.error("Error getting AI suggestion for single context text:", error);
+        addMainPanelError(`AI Context Suggestion Error: ${error.message}`);
         return null;
     }
 }

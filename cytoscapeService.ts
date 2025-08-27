@@ -38,7 +38,7 @@ let anEdgeTargetWasJustSelectedViaTap: boolean = false;
 let pendingNewNodePlacement: { nodeId: string; position: { x: number; y: number } } | null = null;
 
 // Build a reverse lookup map from the predicateSyntax config for efficient parsing
-const syntaxMap = new Map<string, { canonical: string; type: 'incoming' | 'outgoing' | 'symmetric' }>();
+export const syntaxMap = new Map<string, { canonical: string; type: 'incoming' | 'outgoing' | 'symmetric' }>();
 for (const canonical in predicateSyntax) {
     const syntaxes = predicateSyntax[canonical as keyof typeof predicateSyntax];
     if (syntaxes.incoming) {

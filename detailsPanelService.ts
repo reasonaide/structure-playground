@@ -6,11 +6,12 @@ import {
 } from './dom.js';
 import { CyNodeData, CyEdgeData, ConnectedNodeInfo, DPType } from './types.js';
 import { predicateColors, predicatePhrasing, symmetricPredicatesSet, maxDetailPanelLabelLength } from './config.js';
-import { truncateText, getComputedCssVar, getTextColorForBackground, formatTextWithReferences } from './utils.js'; // Added formatTextWithReferences
+import { truncateText, getComputedCssVar, getTextColorForBackground, formatTextWithReferences, addError } from './utils.js'; // Added formatTextWithReferences
 import { getCyInstance, selectNodeInGraph, centerOnNode, getSelectedNode } from './cytoscapeService.js'; 
 import { saveDetailsPanelCollapseState } from './persistenceService.js';
-import { isEditModeActive, setupDetailsPanelForEditMode, handleDeleteEdge, initiateAddConnectionToNewNode } from './editModeService.js';
-import { ICON_PLUS, ICON_TRASH } from './icons.js';
+import { isEditModeActive, setupDetailsPanelForEditMode, handleDeleteEdge, initiateAddConnectionToNewNode, handleUpdateConnectionContext } from './editModeService.js';
+import { ICON_PLUS, ICON_TRASH, ICON_PENCIL, ICON_CHECK, ICON_AI_SUGGEST, ICON_CANCEL_X } from './icons.js';
+import { suggestContextTextsForConnection, suggestSingleContextText, ContextualTextSuggestionContext } from './aiService.js';
 
 
 let detailsPanelCollapseState: { [groupKey: string]: boolean } = {};
@@ -32,6 +33,119 @@ function createAddToNewNodeButton(): HTMLButtonElement {
         initiateAddConnectionToNewNode();
     });
     return btn;
+}
+
+// New: Helper to create the editor for an existing connection's context
+function createConnectionContextEditor(parentLi: HTMLLIElement, edgeInfo: { sourceId: string, predicate: string, targetId: string, subjectContextualText?: string, objectContextualText?: string }): void {
+    // Remove any existing editor first
+    const existingEditor = document.querySelector('.connection-context-editor');
+    if (existingEditor) {
+        existingEditor.remove();
+    }
+
+    const cy = getCyInstance();
+    if (!cy) return;
+
+    const sourceNode = cy.getElementById(edgeInfo.sourceId);
+    const targetNode = cy.getElementById(edgeInfo.targetId);
+
+    if (sourceNode.empty() || targetNode.empty()) {
+        addError("Could not find nodes to create context editor.");
+        return;
+    }
+
+    const sourceData = sourceNode.data() as CyNodeData;
+    const targetData = targetNode.data() as CyNodeData;
+
+    const editorDiv = document.createElement('div');
+    editorDiv.className = 'connection-context-editor';
+
+    editorDiv.innerHTML = `
+        <div class="context-input-group">
+            <label for="editor-source-ctx">Contextualised Text for DP${edgeInfo.sourceId} (Subject):</label>
+            <div class="input-with-button">
+                <input type="text" id="editor-source-ctx" class="editor-source-ctx-input" placeholder="(optional)" value="${edgeInfo.subjectContextualText || ''}">
+                <button class="icon-button suggest-source-ctx" title="Suggest context for source node with AI">${ICON_AI_SUGGEST}</button>
+            </div>
+        </div>
+        <div class="context-input-group">
+            <label for="editor-target-ctx">Contextualised Text for DP${edgeInfo.targetId} (Object):</label>
+            <div class="input-with-button">
+                <input type="text" id="editor-target-ctx" class="editor-target-ctx-input" placeholder="(optional)" value="${edgeInfo.objectContextualText || ''}">
+                <button class="icon-button suggest-target-ctx" title="Suggest context for target node with AI">${ICON_AI_SUGGEST}</button>
+            </div>
+        </div>
+        <div class="connection-context-editor-actions">
+            <button class="icon-button suggest-both-ctx" title="Suggest contextual text for both with AI">${ICON_AI_SUGGEST}</button>
+            <div>
+                <button class="icon-button confirm-ctx-edit" title="Save changes">${ICON_CHECK}</button>
+                <button class="icon-button cancel-ctx-edit" title="Cancel changes">${ICON_CANCEL_X}</button>
+            </div>
+        </div>
+    `;
+
+    parentLi.after(editorDiv);
+
+    const sourceInput = editorDiv.querySelector('.editor-source-ctx-input') as HTMLInputElement;
+    const targetInput = editorDiv.querySelector('.editor-target-ctx-input') as HTMLInputElement;
+
+    editorDiv.querySelector('.cancel-ctx-edit')?.addEventListener('click', () => editorDiv.remove());
+
+    editorDiv.querySelector('.confirm-ctx-edit')?.addEventListener('click', () => {
+        handleUpdateConnectionContext(edgeInfo.sourceId, edgeInfo.predicate, edgeInfo.targetId, sourceInput.value, targetInput.value);
+        editorDiv.remove(); // The graph will re-render, but this provides immediate feedback
+    });
+
+    const handleAISuggest = async (side: 'both' | 'subject' | 'object') => {
+        const phrasing = predicatePhrasing[edgeInfo.predicate] || predicatePhrasing.default;
+        const predicatePhrase = phrasing.outgoing || phrasing.symmetric || edgeInfo.predicate;
+
+        const buttons = [
+            editorDiv.querySelector('.suggest-both-ctx'),
+            editorDiv.querySelector('.suggest-source-ctx'),
+            editorDiv.querySelector('.suggest-target-ctx')
+        ].filter(b => b) as HTMLButtonElement[];
+        
+        const clickedButton = buttons.find(b => b.classList.contains(`suggest-${side}-ctx`)) || buttons[0];
+        const originalIcon = clickedButton.innerHTML;
+
+        buttons.forEach(b => b.disabled = true);
+        clickedButton.innerHTML = `<div class="spinner"></div>`;
+
+        try {
+            if (side === 'both') {
+                const context: ContextualTextSuggestionContext = {
+                    SUBJECT_DP_TEXT: sourceData.rawText,
+                    OBJECT_DP_TEXT: targetData.rawText,
+                    PREDICATE_PHRASE: predicatePhrase
+                };
+                const result = await suggestContextTextsForConnection(context);
+                if (result) {
+                    sourceInput.value = result.subjectContext;
+                    targetInput.value = result.objectContext;
+                }
+            } else {
+                const context: ContextualTextSuggestionContext = {
+                    SUBJECT_DP_TEXT: sourceData.rawText,
+                    OBJECT_DP_TEXT: targetData.rawText,
+                    PREDICATE_PHRASE: predicatePhrase,
+                    SIDE_TO_GENERATE: side,
+                    OTHER_SIDE_CONTEXT: side === 'subject' ? targetInput.value : sourceInput.value
+                };
+                const result = await suggestSingleContextText(context);
+                if (result !== null) {
+                    (side === 'subject' ? sourceInput : targetInput).value = result;
+                }
+            }
+        } finally {
+            buttons.forEach(b => b.disabled = false);
+            clickedButton.innerHTML = originalIcon;
+        }
+    };
+
+    editorDiv.querySelector('.suggest-both-ctx')?.addEventListener('click', () => handleAISuggest('both'));
+    editorDiv.querySelector('.suggest-source-ctx')?.addEventListener('click', () => handleAISuggest('subject'));
+    editorDiv.querySelector('.suggest-target-ctx')?.addEventListener('click', () => handleAISuggest('object'));
 }
 
 
@@ -62,7 +176,7 @@ export function updateDetailsPanel(node: NodeSingular): void {
         groupKey: string,
         nodes: ConnectedNodeInfo[],
         color: string,
-        edgesData: { sourceId: string, predicate: string, targetId: string, contextualTextForOtherNode?: string }[]
+        edgesData: { sourceId: string, predicate: string, targetId: string, subjectContextualText?: string, objectContextualText?: string }[]
     ): HTMLDetailsElement => {
         hasAnyConnections = true;
         const detailsElem = document.createElement('details');
@@ -94,11 +208,15 @@ export function updateDetailsPanel(node: NodeSingular): void {
             textSpan.className = 'connection-text';
             
             const edgeInfo = edgesData[index];
-            const contextualText = edgeInfo.contextualTextForOtherNode;
+
+            // Determine which node is "this" (the selected one) and which is "other"
+            const isThisNodeTheSource = edgeInfo.sourceId === node.id();
+            const contextualTextForOtherNode = isThisNodeTheSource ? edgeInfo.objectContextualText : edgeInfo.subjectContextualText;
+
             const originalText = `DP${connNode.id}: ${truncateText(connNode.text, maxDetailPanelLabelLength)}`;
 
-            if (contextualText) {
-                const displayText = `DP${connNode.id}: ${truncateText(contextualText, maxDetailPanelLabelLength)}`;
+            if (contextualTextForOtherNode) {
+                const displayText = `DP${connNode.id}: ${truncateText(contextualTextForOtherNode, maxDetailPanelLabelLength)}`;
                 const formattedDisplayText = formatTextWithReferences(displayText);
                 const formattedOriginalText = formatTextWithReferences(originalText);
                 
@@ -142,6 +260,19 @@ export function updateDetailsPanel(node: NodeSingular): void {
             liElem.appendChild(textSpan);
 
             if (isEditModeActive()) {
+                const buttonsWrapper = document.createElement('div');
+                buttonsWrapper.style.display = 'flex';
+                buttonsWrapper.style.alignItems = 'center';
+
+                const editEdgeBtn = document.createElement('button');
+                editEdgeBtn.innerHTML = ICON_PENCIL;
+                editEdgeBtn.className = 'icon-button edit-edge-button';
+                editEdgeBtn.title = 'Edit contextual text for this connection';
+                editEdgeBtn.addEventListener('click', () => {
+                    createConnectionContextEditor(liElem, edgeInfo);
+                });
+                buttonsWrapper.appendChild(editEdgeBtn);
+
                 const deleteEdgeBtn = document.createElement('button');
                 deleteEdgeBtn.innerHTML = ICON_TRASH;
                 deleteEdgeBtn.className = 'icon-button delete-edge-button';
@@ -149,7 +280,9 @@ export function updateDetailsPanel(node: NodeSingular): void {
                 deleteEdgeBtn.addEventListener('click', () => {
                     handleDeleteEdge(edgeInfo.sourceId, edgeInfo.predicate, edgeInfo.targetId);
                 });
-                liElem.appendChild(deleteEdgeBtn);
+                buttonsWrapper.appendChild(deleteEdgeBtn);
+
+                liElem.appendChild(buttonsWrapper);
             }
             ulElem.appendChild(liElem);
         });
@@ -157,7 +290,7 @@ export function updateDetailsPanel(node: NodeSingular): void {
         return detailsElem;
     };
 
-    const symmetricConnectionsGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, contextualTextForOtherNode?: string }[] } } = {};
+    const symmetricConnectionsGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, subjectContextualText?: string, objectContextualText?: string }[] } } = {};
     const allConnectedEdges = node.connectedEdges();
 
     allConnectedEdges.forEach(edge => {
@@ -179,15 +312,8 @@ export function updateDetailsPanel(node: NodeSingular): void {
                 text: otherNodeData.rawText || otherNodeData.shortLabel
             });
 
-            let contextualTextForOtherNode: string | undefined;
-            if (otherNode.id() === edge.source().id()) { // otherNode is the source of this edge
-                contextualTextForOtherNode = edgeData.subjectContextualText;
-            } else { // otherNode is the target of this edge
-                contextualTextForOtherNode = edgeData.objectContextualText;
-            }
-
             symmetricConnectionsGrouped[phrasedPredicate].edges.push({
-                 sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), contextualTextForOtherNode
+                 sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), subjectContextualText: edgeData.subjectContextualText, objectContextualText: edgeData.objectContextualText
             });
         }
     });
@@ -223,7 +349,7 @@ export function updateDetailsPanel(node: NodeSingular): void {
     );
     if (incomingAsymmetricEdges.length > 0) {
         createSectionHeader("Incoming Connections (Node is Target/Object)");
-        const incomingGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, contextualTextForOtherNode?: string }[] } } = {};
+        const incomingGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, subjectContextualText?: string, objectContextualText?: string }[] } } = {};
         incomingAsymmetricEdges.forEach(edge => {
             const edgeData = edge.data() as CyEdgeData;
             const predicate = edgeData.label;
@@ -235,11 +361,8 @@ export function updateDetailsPanel(node: NodeSingular): void {
             if (!incomingGrouped[phrasedPredicate]) incomingGrouped[phrasedPredicate] = { color: color, nodes: [], edges: [] };
             incomingGrouped[phrasedPredicate].nodes.push({ id: sourceNode.id(), text: sourceNodeData.rawText || sourceNodeData.shortLabel });
             
-            // For incoming edges, the "other" node is the source, so we need subjectContextualText.
-            const contextualTextForOtherNode = edgeData.subjectContextualText;
-            
             incomingGrouped[phrasedPredicate].edges.push({
-                sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), contextualTextForOtherNode
+                sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), subjectContextualText: edgeData.subjectContextualText, objectContextualText: edgeData.objectContextualText
             });
         });
         Object.keys(incomingGrouped).sort().forEach(phrasedPred => {
@@ -253,7 +376,7 @@ export function updateDetailsPanel(node: NodeSingular): void {
     );
     if (outgoingAsymmetricEdges.length > 0) {
         createSectionHeader("Outgoing Connections (Node is Source/Subject)");
-        const outgoingGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, contextualTextForOtherNode?: string }[] } } = {};
+        const outgoingGrouped: { [key: string]: { color: string; nodes: ConnectedNodeInfo[]; edges: { sourceId: string, predicate: string, targetId: string, subjectContextualText?: string, objectContextualText?: string }[] } } = {};
         outgoingAsymmetricEdges.forEach(edge => {
             const edgeData = edge.data() as CyEdgeData;
             const predicate = edgeData.label;
@@ -265,11 +388,8 @@ export function updateDetailsPanel(node: NodeSingular): void {
             if (!outgoingGrouped[phrasedPredicate]) outgoingGrouped[phrasedPredicate] = { color: color, nodes: [], edges: [] };
             outgoingGrouped[phrasedPredicate].nodes.push({ id: targetNode.id(), text: targetNodeData.rawText || targetNodeData.shortLabel });
 
-            // For outgoing edges, the "other" node is the target, so we need objectContextualText.
-            const contextualTextForOtherNode = edgeData.objectContextualText;
-
             outgoingGrouped[phrasedPredicate].edges.push({
-                 sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), contextualTextForOtherNode
+                 sourceId: edge.source().id(), predicate: predicate, targetId: edge.target().id(), subjectContextualText: edgeData.subjectContextualText, objectContextualText: edgeData.objectContextualText
             });
         });
         Object.keys(outgoingGrouped).sort().forEach(phrasedPred => {

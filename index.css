@@ -878,6 +878,15 @@ body.dark-mode .dp-type-badge.type-unspecified {
     height: 1.5em;
 }
 
+#detailsPanel li .edit-edge-button {
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+#detailsPanel li .edit-edge-button svg { 
+    width: 1.5em; 
+    height: 1.5em;
+}
+
 .details-section-header {
     margin-top: 0px;
     margin-bottom: 5px;
@@ -966,13 +975,135 @@ body.dark-mode .add-to-new-node-button.icon-button {
     opacity: 0.7;
 }
 
+/* New styling for contextual text section */
+#acnnContextualTextSection {
+    padding: 8px;
+    margin-top: -5px; /* Pull it closer to the text area */
+    margin-bottom: 8px;
+    border: 1px dashed var(--input-border-color);
+    border-radius: 4px;
+    background-color: color-mix(in srgb, var(--graph-bg-color) 80%, transparent);
+}
+.context-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.context-preview-text {
+    flex-grow: 1;
+    font-size: 0.85em;
+    font-style: italic;
+    opacity: 0.8;
+}
+#acnnContextEditorContainer {
+    align-items: center; /* Vertically align input column and checkmark button */
+}
+
+/* --- New Class-Based Visibility for Context Editor --- */
+#acnnContextualTextSection #acnnContextEditorContainer {
+    display: none;
+}
+#acnnContextualTextSection.editing-context #acnnContextPreviewContainer {
+    display: none;
+}
+#acnnContextualTextSection.editing-context #acnnContextEditorContainer {
+    display: flex;
+}
+/* --- End New --- */
+
+.context-input-group {
+    display: flex;
+    flex-direction: column;
+}
+.context-input-group label {
+    font-size: 0.8em;
+    margin-bottom: 2px;
+    opacity: 0.9;
+}
+.input-with-button {
+    display: flex;
+    align-items: center;
+}
+.input-with-button input[type="text"] {
+    flex-grow: 1;
+    padding: 4px 6px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 3px;
+    background-color: var(--graph-bg-color);
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+.input-with-button .icon-button {
+    margin: 0 0 0 4px; /* Margin on the left */
+}
+.input-with-button .icon-button svg {
+    width: 1.5em;
+    height: 1.5em;
+}
+/* New style for the confirm context button */
+#acnnConfirmContextButton {
+    padding: 4px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+#acnnConfirmContextButton svg {
+    width: 1.9em;
+    height: 1.9em;
+    fill: var(--icon-success-color);
+}
+
+/* --- New Editor for Existing Connections --- */
+.connection-context-editor {
+    padding: 10px;
+    margin-top: -1px;
+    margin-bottom: 8px;
+    border: 1px dashed var(--input-border-color);
+    border-radius: 0 0 4px 4px;
+    background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.connection-context-editor .context-input-group {
+    flex-direction: column;
+    align-items: stretch;
+}
+.connection-context-editor .connection-context-editor-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+}
+.connection-context-editor .confirm-ctx-edit svg {
+    fill: var(--icon-success-color);
+}
+.connection-context-editor .cancel-ctx-edit svg {
+    fill: var(--icon-error-color);
+}
+.connection-context-editor .suggest-both-ctx svg {
+    fill: var(--ai-suggest-icon-color);
+}
+.connection-context-editor .spinner {
+    width: 1.5em;
+    height: 1.5em;
+    border-width: 2px;
+}
 
 /* --- Panel Switcher --- */
 #panelSwitcher {
     display: flex;
-    justify-content: space-around;
+    align-items: center;
     border-bottom: 1px solid var(--section-border-color);
 }
+#panelSwitcher > div { /* Wrapper for buttons */
+    display: flex;
+    flex-grow: 1;
+}
+#helpButton svg {
+    width: 1.8em;
+    height: 1.8em;
+}
+
 .panel-switch-button {
     flex-grow: 1;
     margin: 0 2px 5px 2px !important;
@@ -1210,6 +1341,39 @@ body.dark-mode #aiChatHistory .ai-code-message {
     */
 }
 
+#customChoiceContainer {
+    display: none;
+    margin-bottom: 20px;
+    text-align: left;
+    padding: 0 10px;
+}
+
+.custom-choice-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.custom-choice-item:hover {
+    background-color: var(--list-item-hover-bg);
+}
+.custom-choice-item input[type="radio"] {
+    margin-right: 10px;
+}
+.custom-choice-item label {
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: normal;
+    color: var(--text-color);
+}
+.custom-choice-item label small {
+    display: block;
+    opacity: 0.7;
+    font-size: 0.85em;
+    margin-top: 2px;
+}
 
 #customConfirmButtons button {
     padding: 8px 16px;
@@ -1345,6 +1509,20 @@ body.dark-mode #customConfirmButtons button#customConfirmOkButton.confirm-ok-des
     background-color: transparent; /* Override button hover */
     border: none;
 }
+
+#apiKeyModalButtons #apiKeyUnsetButton {
+    background-color: var(--error-bg-color);
+    border-color: var(--error-border-color);
+    color: var(--error-text-color);
+}
+#apiKeyModalButtons #apiKeyUnsetButton:hover {
+    background-color: var(--error-border-color);
+    color: var(--bg-color);
+}
+body.dark-mode #apiKeyModalButtons #apiKeyUnsetButton:hover {
+    color: var(--text-color);
+}
+
 #supabaseModalButtons #supabaseCancelButton {
     color: var(--error-text-color);
 }

@@ -1,5 +1,4 @@
 // main.ts (formerly index.tsx)
-import './index.css';
 // Fix: Import NodeSingular from cytoscape
 import { NodeSingular } from 'cytoscape';
 import {
@@ -25,10 +24,14 @@ import {
     toggleSunburstFilterButton, sunburstFilterPanel, sunburstLabelToggle,
     aiPromptInputElem as aiPromptInputTextAreaElem, // Renamed import for consistency
     sendAiPromptButton,
+    cancelAiPromptButton,
     detailsNodeEditTextArea,
-    apiKeyModalOverlay, apiKeyInput, apiKeySaveButton, apiKeyProceedWithoutButton, setApiKeyButton, // New API Key elements
+    apiKeyModalOverlay, apiKeyInput, apiKeySaveButton, apiKeyProceedWithoutButton, setApiKeyButton, // API Key elements
+    helpButton, apiKeyUnsetButton, // New help/API elements
     setupCloudSaveButton, supabaseSetupModalOverlay, supabaseUrlInput, supabaseKeyInput,
-    supabaseSaveButton, supabaseCancelButton
+    supabaseSaveButton, supabaseCancelButton,
+    acnnSuggestContextBothButton, acnnEditContextButton, acnnSuggestSubjectContextButton, acnnSuggestObjectContextButton,
+    acnnConfirmContextButton
 } from './dom.js';
 import {
     initializeCytoscape, applyLayout, searchNodesAndHighlight,
@@ -47,6 +50,8 @@ import {
     saveApiKeyAndReload,
     proceedWithoutAiAndReload,
     showApiKeyModal,
+    unsetApiKeyAndReload,
+    hideApiKeyModal, // Added import
     sendPromptToAI,
     exportChatAndStructure,
     importChatAndStructureHandler,
@@ -54,6 +59,7 @@ import {
     isAiInitialized,
     populateModelsIfNotLoaded,
     getSelectedModel,
+    cancelCurrentAiRequest,
     setInitialAiChatHistory,
     setCurrentAiStructure,
     getIsAIProcessing,
@@ -118,7 +124,7 @@ import {
     ICON_GEAR, ICON_SUN, ICON_MOON, ICON_PENCIL, ICON_CHECK,
     ICON_PLUS, ICON_LINK, ICON_UNDO, ICON_REDO, ICON_TRASH, ICON_CANCEL_X, ICON_TARGET,
     ICON_AI_SUGGEST, ICON_SUNBURST, ICON_GRAPH_VIEW, ICON_FIT_TO_VIEW, ICON_FILL_SPACE,
-    ICON_FILTER, ICON_LABEL_ON, ICON_LABEL_OFF
+    ICON_FILTER, ICON_LABEL_ON, ICON_LABEL_OFF, ICON_HELP
 } from './icons.js';
 import { renderSunburst, destroySunburst, highlightSunburstNode, SunburstConnectionMode } from './sunburstService.js';
 
@@ -171,7 +177,8 @@ export function setInitialControlsOverlayVisibility(isVisible: boolean): void {
     }
 }
 
-export function setInitialActiveControlPanel(panelName: 'manual' | 'ai' | 'ai_lab' | null): void {
+// Fix: Update function signature to accept legacy 'export' type from persisted state to prevent type errors.
+export function setInitialActiveControlPanel(panelName: 'manual' | 'ai' | 'ai_lab' | 'export' | null): void {
     if (panelName === 'manual') {
         switchToManualInputButton.click();
     } else if (panelName === 'ai') {
@@ -822,7 +829,6 @@ async function handleLoadAllDataForSlot(): Promise<void> {
     updateCloudStatus(finalStatusMessage, isFinalStatusError, 5000);
 }
 
-
 function setupEventListeners(): void {
     toggleControlsButton.addEventListener('click', async () => {
         controlsOverlay.classList.toggle('hidden');
@@ -844,18 +850,44 @@ function setupEventListeners(): void {
     });
 
     // --- API Key Modal Listeners ---
+    if (helpButton) {
+        helpButton.addEventListener('click', showApiKeyModal);
+    }
     if (apiKeySaveButton && apiKeyInput) {
         apiKeySaveButton.addEventListener('click', () => {
-            saveApiKeyAndReload(apiKeyInput.value);
-        });
-        apiKeyInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            if (apiKeyInput.value.trim() !== '') {
                 saveApiKeyAndReload(apiKeyInput.value);
+            } else {
+                hideApiKeyModal();
+            }
+        });
+
+        apiKeyInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !apiKeySaveButton.disabled) {
+                if (apiKeyInput.value.trim() !== '') {
+                    saveApiKeyAndReload(apiKeyInput.value);
+                }
+            }
+        });
+        
+        apiKeyInput.addEventListener('input', () => {
+            const hasValue = apiKeyInput.value.trim() !== '';
+            const keyIsSet = isAiInitialized();
+
+            if (keyIsSet) {
+                apiKeySaveButton.textContent = hasValue ? 'Save New Key' : 'Close';
+                apiKeySaveButton.disabled = false; // Always enabled in manage mode
+            } else {
+                apiKeySaveButton.textContent = 'Save Key';
+                apiKeySaveButton.disabled = !hasValue;
             }
         });
     }
     if (apiKeyProceedWithoutButton) {
         apiKeyProceedWithoutButton.addEventListener('click', proceedWithoutAiAndReload);
+    }
+    if (apiKeyUnsetButton) {
+        apiKeyUnsetButton.addEventListener('click', unsetApiKeyAndReload);
     }
     if (setApiKeyButton) {
         setApiKeyButton.addEventListener('click', showApiKeyModal);
@@ -1107,11 +1139,14 @@ function setupEventListeners(): void {
     if (sendAiPromptButton) {
         sendAiPromptButton.addEventListener('click', sendPromptToAI);
     }
+    if (cancelAiPromptButton) {
+        cancelAiPromptButton.addEventListener('click', cancelCurrentAiRequest);
+    }
     if (aiPromptInputTextAreaElem) {
         aiPromptInputTextAreaElem.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                sendPromptToAI();
+                sendAiPromptButton.click();
             }
         });
     }
@@ -1251,6 +1286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addEdgeButton.innerHTML = ICON_LINK;
     undoButton.innerHTML = ICON_UNDO;
     redoButton.innerHTML = ICON_REDO;
+    if (helpButton) helpButton.innerHTML = ICON_HELP;
     detailsNodeDeleteButton.innerHTML = ICON_TRASH;
     if (detailsPanelCloseButton) detailsPanelCloseButton.innerHTML = ICON_CANCEL_X;
     if (detailsNodeCenterButton) detailsNodeCenterButton.innerHTML = ICON_TARGET;
@@ -1259,6 +1295,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     acnnConfirmButton.innerHTML = ICON_CHECK;
     acnnCancelButton.innerHTML = ICON_CANCEL_X;
     acnnSuggestAiButton.innerHTML = ICON_AI_SUGGEST;
+    // New icons for contextual text section
+    if (acnnSuggestContextBothButton) acnnSuggestContextBothButton.innerHTML = ICON_AI_SUGGEST;
+    if (acnnEditContextButton) acnnEditContextButton.innerHTML = ICON_PENCIL;
+    if (acnnConfirmContextButton) acnnConfirmContextButton.innerHTML = ICON_CHECK;
+    if (acnnSuggestSubjectContextButton) acnnSuggestSubjectContextButton.innerHTML = ICON_AI_SUGGEST;
+    if (acnnSuggestObjectContextButton) acnnSuggestObjectContextButton.innerHTML = ICON_AI_SUGGEST;
+    
     if (aiTemplateNewButton) aiTemplateNewButton.innerHTML = ICON_PLUS;
     if (aiTemplateDeleteButton) aiTemplateDeleteButton.innerHTML = ICON_TRASH;
     if (aiTemplateSaveButton) aiTemplateSaveButton.innerHTML = ICON_CHECK;

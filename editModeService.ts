@@ -13,13 +13,18 @@ import {
     acnnSuggestAiButton, acnnAiLoadingIndicator, acnnNewNodeTypeGroup,
     errorDisplay, // Main error display
     detailsNodeSuggestAiButton, detailsNodeSuggestionTaskSelector, detailsNodeAiLoadingIndicator, // New elements
-    detailsNodeWikidataReferencesList // New for displaying Wikidata items
+    detailsNodeWikidataReferencesList, // New for displaying Wikidata items
+    acnnContextualTextSection, acnnContextPreviewContainer, acnnContextPreviewText,
+    acnnSuggestContextBothButton, acnnEditContextButton, acnnContextEditorContainer,
+    acnnSubjectContextInput, acnnSuggestSubjectContextButton, acnnObjectContextInput,
+    acnnSuggestObjectContextButton,
+    acnnConfirmContextButton
 } from './dom.js';
-import { showCustomConfirmDialog, addError as addMainPanelError, clearErrors as clearMainPanelErrors, truncateText, getComputedCssVar } from './utils.js';
-import { getSelectedNode, getCyInstance, selectNodeInGraph, centerOnNode, setPendingNewNodePlacement, getCurrentLayoutName, saveCurrentNodesLayout } from './cytoscapeService.js';
+import { showCustomConfirmDialog, addError as addMainPanelError, clearErrors as clearMainPanelErrors, truncateText, getComputedCssVar, showCustomChoiceDialog } from './utils.js';
+import { getSelectedNode, getCyInstance, selectNodeInGraph, centerOnNode, setPendingNewNodePlacement, getCurrentLayoutName, saveCurrentNodesLayout, syntaxMap } from './cytoscapeService.js';
 import { 
     predicateColors, predicatePhrasing, directedPredicates, undirectedPredicates, symmetricPredicatesSet, 
-    predicateEmojis, maxDetailPanelLabelLength, connectionValidationRules 
+    predicateEmojis, maxDetailPanelLabelLength, connectionValidationRules, predicateSyntax 
 } from './config.js';
 import { 
     DEFAULT_TEMPLATE_PREFIX_SUGGEST_EDIT, 
@@ -28,7 +33,11 @@ import {
 import { updateDetailsPanel, hideDetailsPanel, updateDetailsPanelVisibility } from './detailsPanelService.js';
 import { CyNodeData, CyEdgeData, DPType } from './types.js';
 import { ICON_PENCIL, ICON_CHECK, ICON_LINK, ICON_TARGET, ICON_CANCEL_X, ICON_PLUS, ICON_UNDO, ICON_REDO, ICON_AI_SUGGEST } from './icons.js';
-import { suggestNewNodeTextViaAI, SuggestionContext, isAiInitialized, getAllTemplateNames, suggestNodeTextEditViaAI, EditSuggestionContext, getWikidataItemDetails } from './aiService.js';
+import { 
+    suggestNewNodeTextViaAI, SuggestionContext, isAiInitialized, getAllTemplateNames, 
+    suggestNodeTextEditViaAI, EditSuggestionContext, getWikidataItemDetails,
+    suggestContextTextsForConnection, suggestSingleContextText, ContextualTextSuggestionContext
+} from './aiService.js';
 
 
 const MAX_HISTORY_SIZE = 50;
@@ -127,6 +136,34 @@ export function initializeEditMode(): void {
     if (detailsNodeSuggestAiButton) {
         detailsNodeSuggestAiButton.addEventListener('click', handleAiSuggestNodeTextEdit);
     }
+
+    // New Listeners for contextual text section
+    if (acnnEditContextButton) {
+        acnnEditContextButton.addEventListener('click', () => {
+            acnnContextualTextSection.classList.add('editing-context');
+        });
+    }
+    if (acnnConfirmContextButton) {
+        acnnConfirmContextButton.addEventListener('click', () => {
+            acnnContextualTextSection.classList.remove('editing-context');
+            updateAcnnContextPreview(); // Update preview with changes from inputs
+        });
+    }
+    if (acnnSuggestContextBothButton) {
+        acnnSuggestContextBothButton.addEventListener('click', () => handleAiSuggestContextText('both'));
+    }
+    if (acnnSuggestSubjectContextButton) {
+        acnnSuggestSubjectContextButton.addEventListener('click', () => handleAiSuggestContextText('subject'));
+    }
+    if (acnnSuggestObjectContextButton) {
+        acnnSuggestObjectContextButton.addEventListener('click', () => handleAiSuggestContextText('object'));
+    }
+
+    // Listeners to update preview text
+    acnnPredicateSelect.addEventListener('change', updateAcnnContextPreview);
+    acnnNewNodeTextArea.addEventListener('input', updateAcnnContextPreview);
+    acnnSubjectContextInput.addEventListener('input', updateAcnnContextPreview);
+    acnnObjectContextInput.addEventListener('input', updateAcnnContextPreview);
 }
 
 export function recordSnapshot(): void { // Added export
@@ -256,51 +293,74 @@ function getNextNumericDpId(currentText: string): string {
 
 export async function handleAddNode(): Promise<void> {
     if (!inputTextElem || !renderButton || (edgeCreationStatus !== 'idle' && edgeCreationStatus !== 'source_selected_pending_target')) return;
-    
-    recordSnapshot();
-    const newNodeIdFull = getNextNumericDpId(inputTextElem.value);
-    const newNodeIdPart = newNodeIdFull.replace('DP',''); 
-    const newNodeText = `${newNodeIdFull}.statement: (New Node - Edit Text) #MANUAL_EDIT ${getFormattedTimestamp()}`;
-    
-    const currentLayoutIsSaved = getCurrentLayoutName() === 'saved_layout';
-    const cyInstance = getCyInstance();
 
-    if (currentLayoutIsSaved && cyInstance) {
-        const pan = cyInstance.pan();
-        const zoom = cyInstance.zoom();
-        // Viewport center in model coordinates
-        const targetPosition = {
-            x: (-pan.x / zoom) + (cyInstance.width() / (2 * zoom)),
-            y: (-pan.y / zoom) + (cyInstance.height() / (2 * zoom))
-        };
-        console.log(`[AddNode] Current layout is 'saved_layout'. Calculated viewport center for new node DP${newNodeIdPart}:`, targetPosition);
-        setPendingNewNodePlacement(newNodeIdPart, targetPosition);
-    } else {
-        console.log(`[AddNode] Current layout is '${getCurrentLayoutName()}' or graph not initialized. New node DP${newNodeIdPart} will be placed by default layout.`);
-    }
+    const choices: { value: DPType; label: string; description: string; checked?: boolean }[] = [
+        { value: 'statement', label: 'Statement', description: 'A declarative claim.', checked: true },
+        { value: 'question', label: 'Question', description: 'An interrogative point.' },
+        { value: 'argument', label: 'Argument', description: 'A self-contained line of reasoning.' },
+        { value: 'reference', label: 'Reference', description: 'A pointer to an external source.' }
+    ];
 
-    inputTextElem.value = inputTextElem.value.trim() + (inputTextElem.value.trim() ? '\n' : '') + newNodeText;
-    
-    signalNewNodeAddition(); // Signal that a new node is being added
-    
-    // Save layout if current layout is 'saved_layout' BEFORE rendering
-    if (currentLayoutIsSaved && cyInstance && cyInstance.nodes().length > 0) {
-        console.log("[AddNode] Current layout is 'saved_layout'. Auto-saving current node positions before re-render due to edit.");
-        await saveCurrentNodesLayout(); // Ensure positions of existing nodes are saved
-    }
-    
-    renderButton.click(); 
+    showCustomChoiceDialog(
+        "Select the type for the new Discussion Point:",
+        choices,
+        async (selectedType) => { // onConfirm
+            if (!selectedType) return;
+            const nodeType = selectedType as DPType;
 
-    setTimeout(() => {
-        const cy = getCyInstance();
-        if (cy) {
-            const newNode = cy.getElementById(newNodeIdPart) as NodeSingular;
-            if (newNode && newNode.length > 0) {
-                selectNodeInGraph(newNode);
-                centerOnNode(newNode);
+            recordSnapshot();
+            const newNodeIdFull = getNextNumericDpId(inputTextElem.value);
+            const newNodeIdPart = newNodeIdFull.replace('DP','');
+            
+            let placeholderText = "(New Node - Edit Text)";
+            if (nodeType === 'reference') {
+                placeholderText = "(New Reference - Add URL/DOI)";
+            } else if (nodeType === 'question') {
+                 placeholderText = "(New Question - Edit Text)";
+            } else if (nodeType === 'argument') {
+                 placeholderText = "(New Argument - Edit Text)";
             }
+
+            const newNodeText = `${newNodeIdFull}.${nodeType}: ${placeholderText} #MANUAL_EDIT ${getFormattedTimestamp()}`;
+            
+            const currentLayoutIsSaved = getCurrentLayoutName() === 'saved_layout';
+            const cyInstance = getCyInstance();
+
+            if (currentLayoutIsSaved && cyInstance) {
+                const pan = cyInstance.pan();
+                const zoom = cyInstance.zoom();
+                const targetPosition = {
+                    x: (-pan.x / zoom) + (cyInstance.width() / (2 * zoom)),
+                    y: (-pan.y / zoom) + (cyInstance.height() / (2 * zoom))
+                };
+                setPendingNewNodePlacement(newNodeIdPart, targetPosition);
+            }
+
+            inputTextElem.value = inputTextElem.value.trim() + (inputTextElem.value.trim() ? '\n' : '') + newNodeText;
+            
+            signalNewNodeAddition();
+            
+            if (currentLayoutIsSaved && cyInstance && cyInstance.nodes().length > 0) {
+                await saveCurrentNodesLayout();
+            }
+            
+            renderButton.click(); 
+
+            setTimeout(() => {
+                const cy = getCyInstance();
+                if (cy) {
+                    const newNode = cy.getElementById(newNodeIdPart) as NodeSingular;
+                    if (newNode && newNode.length > 0) {
+                        selectNodeInGraph(newNode);
+                        centerOnNode(newNode);
+                    }
+                }
+            }, 500); 
+        },
+        () => { // onCancel
+            console.log("Add node cancelled.");
         }
-    }, 500); 
+    );
 }
 
 /**
@@ -627,6 +687,35 @@ function updateAcnnNodeTypeOptions() {
     }
 }
 
+function updateAcnnContextPreview() {
+    if (!acnnContextPreviewText || !edgeSourceNodeId || !acnnPredicateSelect) return;
+
+    const sourceNode = getSelectedNode();
+    if (!sourceNode || sourceNode.id() !== edgeSourceNodeId) return;
+
+    const sourceData = sourceNode.data() as CyNodeData;
+    const sourceContextText = acnnSubjectContextInput.value.trim();
+    const objectContextText = acnnObjectContextInput.value.trim();
+    const newObjectText = acnnNewNodeTextArea.value.trim();
+
+    const sourceDisplayText = sourceContextText || `DP${sourceData.id}`;
+    const objectDisplayText = objectContextText || (newObjectText ? `"${truncateText(newObjectText, 20)}"` : 'New Node');
+
+    const selectedOption = acnnPredicateSelect.options[acnnPredicateSelect.selectedIndex];
+    if (!selectedOption) {
+        acnnContextPreviewText.textContent = `${sourceDisplayText} ... ${objectDisplayText}`;
+        return;
+    }
+
+    // The text content of the option (e.g., "Is questioned by") already implies the direction from the source node's perspective.
+    const predicateText = selectedOption.textContent?.replace(/[\p{Emoji}\s]/gu, ' ').trim() || 'relates to';
+    
+    // Always display as: (Source) ---predicate---> (New Node)
+    const preview = `${sourceDisplayText} ${predicateText} ${objectDisplayText}`;
+
+    acnnContextPreviewText.textContent = preview;
+}
+
 
 function showAddConnectionToNewNodeUI(sourceNode: NodeSingular): void {
     if (!addConnectionToNewNodeUIDiv || !acnnSourceInfoDiv || !acnnPredicateSelect || !acnnNewNodeTextArea || !detailsPanel || !acnnSuggestAiButton || !acnnNewNodeTypeGroup) return;
@@ -639,6 +728,11 @@ function showAddConnectionToNewNodeUI(sourceNode: NodeSingular): void {
     acnnSourceInfoDiv.textContent = `DP${sourceData.id}: ${truncateText(sourceData.rawText, 50)}`;
     acnnNewNodeTextArea.value = '';
     acnnNewNodeTextArea.placeholder = "Enter text for the new node...";
+
+    // Reset contextual text UI
+    acnnSubjectContextInput.value = '';
+    acnnObjectContextInput.value = '';
+    acnnContextualTextSection.classList.remove('editing-context');
     
     acnnNewNodeTypeGroup.innerHTML = '';
     const nodeTypes: DPType[] = ['statement', 'question', 'argument', 'reference'];
@@ -668,6 +762,7 @@ function showAddConnectionToNewNodeUI(sourceNode: NodeSingular): void {
     acnnPredicateSelect.addEventListener('change', updateAcnnNodeTypeOptions);
     
     updateAcnnNodeTypeOptions();
+    updateAcnnContextPreview(); // Initial update for preview
 
     if (addConnectionToNewNodeUIDiv.style.display !== 'block') {
         addConnectionToNewNodeUIDiv.style.display = 'block';
@@ -772,6 +867,72 @@ async function handleAiSuggestNewNodeText(): Promise<void> {
     }
 }
 
+async function handleAiSuggestContextText(side: 'both' | 'subject' | 'object'): Promise<void> {
+    const sourceNode = getSelectedNode();
+    if (!sourceNode || !edgeSourceNodeId || sourceNode.id() !== edgeSourceNodeId) {
+        addMainPanelError("Source node context is lost. Cannot suggest text.");
+        return;
+    }
+    const sourceData = sourceNode.data() as CyNodeData;
+    const objectText = acnnNewNodeTextArea.value.trim();
+    const selectedOption = acnnPredicateSelect.options[acnnPredicateSelect.selectedIndex];
+
+    if (!objectText) {
+        addMainPanelError("Please enter some text for the new node before suggesting context.");
+        return;
+    }
+    if (!selectedOption) {
+        addMainPanelError("Please select a predicate before suggesting context.");
+        return;
+    }
+
+    const predicatePhrase = selectedOption.textContent?.replace(/[\p{Emoji}\s]/gu, ' ').trim() || 'relates to';
+
+    // UI: Disable buttons and show loading spinner
+    const buttonsToDisable = [acnnSuggestContextBothButton, acnnSuggestSubjectContextButton, acnnSuggestObjectContextButton];
+    buttonsToDisable.forEach(btn => btn.disabled = true);
+    let clickedButton: HTMLButtonElement;
+    if (side === 'both') clickedButton = acnnSuggestContextBothButton;
+    else if (side === 'subject') clickedButton = acnnSuggestSubjectContextButton;
+    else clickedButton = acnnSuggestObjectContextButton;
+    const originalIcon = clickedButton.innerHTML;
+    clickedButton.innerHTML = `<div class="spinner" style="width: 1.5em; height: 1.5em; border-width: 2px;"></div>`;
+
+    try {
+        if (side === 'both') {
+            const context: ContextualTextSuggestionContext = {
+                SUBJECT_DP_TEXT: sourceData.rawText,
+                OBJECT_DP_TEXT: objectText,
+                PREDICATE_PHRASE: predicatePhrase
+            };
+            const result = await suggestContextTextsForConnection(context);
+            if (result) {
+                acnnSubjectContextInput.value = result.subjectContext;
+                acnnObjectContextInput.value = result.objectContext;
+                acnnSubjectContextInput.dispatchEvent(new Event('input', { bubbles: true })); // This will trigger preview update via its own listener
+            }
+        } else { // 'subject' or 'object'
+            const context: ContextualTextSuggestionContext = {
+                SUBJECT_DP_TEXT: sourceData.rawText,
+                OBJECT_DP_TEXT: objectText,
+                PREDICATE_PHRASE: predicatePhrase,
+                SIDE_TO_GENERATE: side,
+                OTHER_SIDE_CONTEXT: side === 'subject' ? acnnObjectContextInput.value : acnnSubjectContextInput.value
+            };
+            const result = await suggestSingleContextText(context);
+            if (result !== null) {
+                const targetInput = side === 'subject' ? acnnSubjectContextInput : acnnObjectContextInput;
+                targetInput.value = result;
+                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+    } finally {
+        // UI: Re-enable buttons and restore icon
+        buttonsToDisable.forEach(btn => btn.disabled = false);
+        clickedButton.innerHTML = originalIcon;
+    }
+}
+
 
 async function handleConfirmConnectionToNewNode(): Promise<void> {
     if (edgeCreationStatus !== 'pending_new_node_input' || !edgeSourceNodeId || !acnnNewNodeTextArea.value.trim() || !inputTextElem || !renderButton || !acnnNewNodeTypeGroup) {
@@ -815,11 +976,26 @@ async function handleConfirmConnectionToNewNode(): Promise<void> {
     let finalSourceIdForConnection = edgeSourceNodeId; 
     let finalTargetIdForConnection = newNodeIdPart;   
 
+    // The context inputs are labeled from the UI perspective: Subject=Source(Existing), Object=New Node
+    let contextForExistingNode = acnnSubjectContextInput.value.trim();
+    let contextForNewNode = acnnObjectContextInput.value.trim();
+    
+    let subjectContextTextForFinalConnection = contextForExistingNode;
+    let objectContextTextForFinalConnection = contextForNewNode;
+
     if (direction === 'reverse') { 
-        finalSourceIdForConnection = newNodeIdPart;
-        finalTargetIdForConnection = edgeSourceNodeId;
+        [finalSourceIdForConnection, finalTargetIdForConnection] = [newNodeIdPart, edgeSourceNodeId];
+        // The final connection's subject is the NEW node, and its object is the EXISTING node.
+        // We must swap the context text to match this final structure.
+        [subjectContextTextForFinalConnection, objectContextTextForFinalConnection] = [contextForNewNode, contextForExistingNode];
     }
-    const newConnectionText = `(DP${finalSourceIdForConnection} ${predicateName} DP${finalTargetIdForConnection}) #MANUAL_EDIT ${getFormattedTimestamp()}`;
+    
+    let contextualTextPart = "";
+    if (subjectContextTextForFinalConnection || objectContextTextForFinalConnection) {
+        contextualTextPart = `: ${subjectContextTextForFinalConnection} :/: ${objectContextTextForFinalConnection}`;
+    }
+
+    const newConnectionText = `(DP${finalSourceIdForConnection} ${predicateName} DP${finalTargetIdForConnection})${contextualTextPart} #MANUAL_EDIT ${getFormattedTimestamp()}`;
     
     const currentInput = inputTextElem.value.trim();
     inputTextElem.value = (currentInput ? currentInput + '\n' : '') + newNodeDefinition + '\n' + newConnectionText;
@@ -847,6 +1023,15 @@ async function handleConfirmConnectionToNewNode(): Promise<void> {
 
 function handleCancelConnectionToNewNode(): void {
     setEdgeCreationStatus('idle');
+    // Reset contextual text UI state as well
+    if (acnnContextualTextSection) acnnContextualTextSection.classList.remove('editing-context');
+    if (acnnSubjectContextInput) acnnSubjectContextInput.value = '';
+    if (acnnObjectContextInput) acnnObjectContextInput.value = '';
+    if (acnnContextPreviewText) acnnContextPreviewText.textContent = '';
+    if (acnnEditContextButton) {
+        acnnEditContextButton.innerHTML = ICON_PENCIL;
+        acnnEditContextButton.title = 'Manually edit contextual text';
+    }
 }
 
 
@@ -897,6 +1082,91 @@ export function handleUpdateNodeText(nodeId: string, newText: string): void {
         addMainPanelError(`Node DP${nodeId} not found in text for updating.`);
     }
 }
+
+export function handleUpdateConnectionContext(sourceId: string, canonicalPredicate: string, targetId: string, newSourceContext: string, newObjectContext: string): void {
+    if (!inputTextElem || !renderButton) return;
+
+    recordSnapshot();
+    const lines = inputTextElem.value.split('\n');
+    let lineIndex = -1;
+    let foundLine = '';
+
+    const syntaxInfo = predicateSyntax[canonicalPredicate as keyof typeof predicateSyntax];
+    if (!syntaxInfo) {
+        addMainPanelError(`Could not find syntax info for predicate '${canonicalPredicate}'.`);
+        return;
+    }
+
+    const allPhrases = [
+        ...(syntaxInfo.outgoing || []),
+        ...(syntaxInfo.incoming || []),
+        ...(syntaxInfo.symmetric || [])
+    ];
+    if (allPhrases.length === 0) {
+        addMainPanelError(`No syntax phrases found for predicate '${canonicalPredicate}'.`);
+        return;
+    }
+
+    const predicateRegexPart = `(?:${allPhrases.join('|')})`;
+
+    const sId = sourceId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tId = targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const pattern = new RegExp(`^\\s*\\(\\s*DP(${sId}|${tId})(?:\\.\\w+)?\\s+(${predicateRegexPart})\\s+DP(${sId}|${tId})(?:\\.\\w+)?\\s*\\)`);
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const match = line.trim().match(pattern);
+        if (match) {
+            const matchS_raw = match[1];
+            const matchP = match[2];
+            const matchO_raw = match[3];
+
+            const syntax = syntaxMap.get(matchP);
+            if (!syntax) continue;
+
+            let effectiveSource = matchS_raw;
+            let effectiveTarget = matchO_raw;
+
+            if (syntax.type === 'incoming') {
+                [effectiveSource, effectiveTarget] = [matchO_raw, matchS_raw];
+            } else if (syntax.type === 'symmetric') {
+                if (matchS_raw > matchO_raw) {
+                    [effectiveSource, effectiveTarget] = [matchO_raw, matchS_raw];
+                }
+            }
+            
+            if (effectiveSource === sourceId && effectiveTarget === targetId) {
+                lineIndex = i;
+                foundLine = line;
+                break;
+            }
+        }
+    }
+
+    if (lineIndex === -1) {
+        addMainPanelError("Could not find the connection line in the text to update.");
+        return;
+    }
+
+    const connectionPartMatch = foundLine.match(/^\s*\((?:.*?)\)/);
+    const connectionPart = connectionPartMatch ? connectionPartMatch[0] : '';
+    const commentPartMatch = foundLine.match(/(\s*#.*)$/);
+    const commentPart = commentPartMatch ? commentPartMatch[0] : '';
+
+    let newContextPart = "";
+    const trimmedSourceCtx = newSourceContext.trim();
+    const trimmedTargetCtx = newObjectContext.trim();
+
+    if (trimmedSourceCtx || trimmedTargetCtx) {
+        newContextPart = `: ${trimmedSourceCtx} :/: ${trimmedTargetCtx}`;
+    }
+
+    lines[lineIndex] = (connectionPart + newContextPart + commentPart).trim();
+    inputTextElem.value = lines.join('\n');
+    renderButton.click();
+}
+
 
 export function handleDeleteNode(nodeId: string): void {
     if (!inputTextElem || !renderButton || (edgeCreationStatus !== 'idle' && edgeCreationStatus !== 'source_selected_pending_target')) {

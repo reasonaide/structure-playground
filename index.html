@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discourse Structure Playground</title>
-    <script type="importmap">
+<script type="importmap">
 {
   "imports": {
     "react/": "https://esm.sh/react@^19.1.0/",
@@ -15,6 +15,7 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
 
@@ -36,7 +37,7 @@
         <button id="toggleEditModeButton" aria-label="Toggle Edit Mode" title="Enter Edit Mode"><!-- SVG_PENCIL --></button>
         <div id="editModeActionButtons" style="display: none;">
             <button id="addNodeButton" aria-label="Add Node" title="Add New Node"><!-- SVG_PLUS --></button>
-            <button id="addEdgeButton" aria-label="Add Edge" title="Add Connection (Select Source Node First)" disabled><!-- SVG_LINK --></button>
+            <button id="addEdgeButton" aria-label="Add Connection (Select Source Node First)" disabled><!-- SVG_LINK --></button>
             <button id="undoButton" aria-label="Undo Last Edit" title="Undo" disabled><!-- SVG_UNDO --></button>
             <button id="redoButton" aria-label="Redo Last Edit" title="Redo" disabled><!-- SVG_REDO --></button>
         </div>
@@ -45,10 +46,13 @@
 
     <div id="controlsOverlay">
         <!-- Panel Switcher -->
-        <div id="panelSwitcher" class="control-section" style="padding-bottom: 5px; margin-bottom: 5px;">
-            <button id="switchToManualInputButton" class="panel-switch-button active">Manual Input</button>
-            <button id="switchToAiAssistantButton" class="panel-switch-button">AI Assistant</button>
-            <button id="switchToAiLabButton" class="panel-switch-button">AI Lab</button>
+        <div id="panelSwitcher" class="control-section" style="padding-bottom: 5px; margin-bottom: 5px; display: flex; align-items: center;">
+             <div style="display: flex; flex-grow: 1;">
+                <button id="switchToManualInputButton" class="panel-switch-button active">Manual Input</button>
+                <button id="switchToAiAssistantButton" class="panel-switch-button">AI Assistant</button>
+                <button id="switchToAiLabButton" class="panel-switch-button">AI Lab</button>
+            </div>
+            <button id="helpButton" class="icon-button" title="Help / API Key Settings" style="margin-left: 8px; padding: 4px; flex-shrink: 0;"><!-- SVG_HELP --></button>
         </div>
 
         <!-- Manual Input Panel -->
@@ -64,7 +68,7 @@ DP_Start: This is the first discussion point.
         </div>
 
         <!-- AI Assistant Panel -->
-        <div id="aiAssistantPanel" class="input-panel" style="display: none;">
+        <div id="aiAssistantPanel" class.ts="input-panel" style="display: none;">
             <div class="control-section">
                 <div id="apiKeySection" style="display: none; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--section-border-color);">
                      <p>AI features are currently disabled.</p>
@@ -90,7 +94,10 @@ DP_Start: This is the first discussion point.
                             <label for="urlContextToggle" style="font-size: 0.85em; cursor:pointer; white-space: nowrap;">URL Context</label>
                         </div>
                     </div>
-                    <button id="sendAiPromptButton">Send Prompt</button>
+                    <div id="aiPromptActions" style="display: flex; gap: 8px;">
+                        <button id="sendAiPromptButton" style="flex-grow: 1;">Send Prompt</button>
+                        <button id="cancelAiPromptButton" style="display: none; flex-grow: 1; background-color: var(--error-bg-color); border-color: var(--error-border-color); color: var(--error-text-color);">Cancel</button>
+                    </div>
                     <div id="aiLoadingIndicator" style="display: none; margin-top: 5px; font-style: italic;">Processing...</div>
                 </div>
 
@@ -126,14 +133,13 @@ DP_Start: This is the first discussion point.
                     <li>Select a template from the dropdown to view/edit its content.</li>
                     <li>Use the "+" button to create a new template. You'll be prompted for a name. System-reserved prefixes (RAI_, SYSTEM_, SUGGEST_EDIT_, SUGGEST_NEW_NODE_) are not allowed. User-created templates will be prefixed with 'MY_' if not already.</li>
                     <li>Use the trash icon to delete the currently selected template (with confirmation). Core templates will revert to defaults if deleted.</li>
-                    <li>Inside a template, you can embed other templates using `{{TemplateName}}` (e.g., `{{RAI_RULESET}}`).</li>
-                    <li>The AI uses the `SYSTEM_PROMPT_MAIN` template by default, which typically embeds other rule templates.</li>
-                    <li>Templates for suggesting edits to existing nodes should be named starting with `SUGGEST_EDIT_` (e.g., `SUGGEST_EDIT_DECONTEXTUALISE`).</li>
+                    <li>Inside a template, you can embed other templates using ` + "`{{TemplateName}}`" + ` (e.g., ` + "`{{RAI_RULESET}}`" + `).</li>
+                    <li>The AI uses the ` + "`SYSTEM_PROMPT_MAIN`" + ` template by default, which typically embeds other rule templates.</li>
+                    <li>Templates for suggesting edits to existing nodes should be named starting with ` + "`SUGGEST_EDIT_`" + ` (e.g., ` + "`SUGGEST_EDIT_DECONTEXTUALISE`" + `).</li>
                     <li>Changes are saved per storage slot when you click the save icon.</li>
                 </ul>
             </div>
         </div>
-
 
         <!-- Common Controls -->
         <div id="searchSection" class="control-section">
@@ -203,8 +209,8 @@ DP_Start: This is the first discussion point.
                 </div>
                 <div id="autoSyncControlsContainer" style="margin-left: 8px; display: flex; align-items: center;">
                     <input type="checkbox" id="autoSyncToggle" aria-label="Toggle Auto Sync">
-                    <label for="autoSyncToggle" style="font-weight: normal; font-size: 0.85em; cursor:pointer;">Auto-Sync</label>
-                    <span id="autoSyncStatusIndicator" class="auto-sync-indicator" style="display: none;" title=""></span>
+                <label for="autoSyncToggle" style="font-weight: normal; font-size: 0.85em; cursor:pointer;">Auto-Sync</label>
+                <span id="autoSyncStatusIndicator" class="auto-sync-indicator" style="display: none;" title=""></span>
                 </div>
             </div>
             <div id="cloudStorageStatus" class="cloud-status-message" style="display: none;"></div>
@@ -276,6 +282,34 @@ DP_Start: This is the first discussion point.
 
             <label for="acnnNewNodeTextArea" style="display: block; margin-bottom: 3px; font-weight: normal; font-size: 0.9em;">New Node Text:</label>
             <textarea id="acnnNewNodeTextArea" placeholder="Enter text for the new node..." style="width: calc(100% - 16px); min-height: 60px; margin-bottom: 10px; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color); font-family: inherit; font-size: 0.95em; resize: vertical;"></textarea>
+            
+            <div id="acnnContextualTextSection" style="margin-bottom: 10px;">
+                <div id="acnnContextPreviewContainer" class="context-container">
+                    <span id="acnnContextPreviewText" class="context-preview-text"></span>
+                    <button id="acnnSuggestContextBothButton" class="icon-button" title="Suggest contextual text for connection with AI"><!-- SVG_AI_SUGGEST --></button>
+                    <button id="acnnEditContextButton" class="icon-button" title="Manually edit contextual text"><!-- SVG_PENCIL --></button>
+                </div>
+                <div id="acnnContextEditorContainer" class="context-container">
+                    <div style="display: flex; flex-direction: column; flex-grow: 1; gap: 6px;">
+                        <div class="context-input-group">
+                            <label for="acnnSubjectContextInput">Source Contextualised Text:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="acnnSubjectContextInput" placeholder="(optional)">
+                                <button id="acnnSuggestSubjectContextButton" class="icon-button" title="Suggest context for source node with AI"><!-- SVG_AI_SUGGEST --></button>
+                            </div>
+                        </div>
+                        <div class="context-input-group">
+                            <label for="acnnObjectContextInput">New Node Contextualised Text:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="acnnObjectContextInput" placeholder="(optional)">
+                                <button id="acnnSuggestObjectContextButton" class="icon-button" title="Suggest context for new node with AI"><!-- SVG_AI_SUGGEST --></button>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="acnnConfirmContextButton" class="icon-button" title="Confirm contextual text changes"><!-- SVG_CHECK --></button>
+                </div>
+            </div>
+            
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <!-- AI Suggest button and loading indicator on the left -->
                 <div>
@@ -297,6 +331,9 @@ DP_Start: This is the first discussion point.
         <div id="customConfirmOverlay" style="display: none;">
             <div id="customConfirmDialog">
                 <p id="customConfirmMessage"></p>
+                <div id="customChoiceContainer" style="display: none;">
+                    <!-- Choices will be populated here by JS -->
+                </div>
                 <input type="text" id="customPromptInput" style="display: none; width: calc(100% - 20px); margin-bottom: 15px; padding: 8px; border: 1px solid var(--input-border-color); border-radius: 4px; background-color: var(--graph-bg-color); color: var(--text-color); font-size: 0.9em;" />
                 <div id="customConfirmButtons">
                     <button id="customConfirmOkButton">Confirm</button>
@@ -309,11 +346,32 @@ DP_Start: This is the first discussion point.
     <!-- API Key Modal -->
     <div id="apiKeyModalOverlay">
         <div id="apiKeyModalDialog">
-            <h4>Google AI API Key Required</h4>
-            <p>To use the AI Assistant features, please enter your Google AI API key. You can get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
+            <h3>Structure Playground</h3>
+            <p>This is a provisional tool for experimenting with the preliminary proposed structuring concept for mapping (verbal) discourse. It allows for visualising and editing these structures, and can use the Google Gemini AI to assist in generating or refining them.</p>
+            <p style="margin-bottom: 5px;">Feel free to give feedback, note however:</p>
+            <ul style="font-size: 0.85em; margin-left: 20px; margin-bottom: 15px; padding-left: 20px;">
+                <li>The AI assistant often does not adhere correctly to the rules of the structuring concept, so the discussion points and connections generated are not necessarily exemplary for the concept.</li>
+                <li>A detailed explanation of the concept and its purposes is not yet publicly available.</li>
+                <li>This tool is just for experimentation and does in no way resemble any planned product.</li>
+                <li>There is no intention for further development, the code is mostly AI-generated without any regard for maintainability.</li>
+            </ul>
+            <p>For further information and the full readme, please visit the <a href="https://github.com/reasonaide/structure-playground" target="_blank" rel="noopener noreferrer">GitHub repository</a>.</p>
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--overlay-border-color);">
+            
+            <div id="apiKeyInitialSetupSection">
+                <h4>Google AI API Key Required</h4>
+                <p>To use the AI Assistant features, please enter your Google AI API key. You can get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
+            </div>
+            <div id="apiKeyManageSection" style="display: none;">
+                <h4>Manage AI API Key</h4>
+                <p id="apiKeyStatusMessage">An API key is currently set, enabling AI features. You can enter a new key below or disable AI features.</p>
+            </div>
+
             <input type="password" id="apiKeyInput" placeholder="Enter your API Key">
+
             <div id="apiKeyModalButtons">
                 <button id="apiKeyProceedWithoutButton">Use without AI features</button>
+                <button id="apiKeyUnsetButton" style="display: none;">Unset Key & Disable AI</button>
                 <button id="apiKeySaveButton">Save Key</button>
             </div>
         </div>

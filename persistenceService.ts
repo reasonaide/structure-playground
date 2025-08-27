@@ -313,7 +313,7 @@ async function saveDataToSupabaseGeneric(dataKey: string, slot: string, value: a
     } catch (e) {
         console.warn(`Error comparing with local cache for ${dataKey} (slot ${slot}), proceeding with cloud save:`, e);
     }
-    
+
     const config = getSupabaseConfig();
     if (!isSupabaseConfigured(config)) {
         updateCloudStatus(`Cloud not configured. Saving ${dataKey} to local cache (slot ${slot}).`, true, 4000);

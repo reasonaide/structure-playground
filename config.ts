@@ -213,3 +213,5 @@ DP16.reference: Nick Bostrom, "Superintelligence: Paths, Dangers, Strategies", 2
 (DP16 isCitedBy DP13)
 (DP12 isEqual DP18)
 `;
+// New export for AI Assistant string options
+export const aiAssistantStrings = ["RAIv2-demo"];

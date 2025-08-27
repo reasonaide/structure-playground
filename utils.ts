@@ -1,7 +1,7 @@
 // utils.ts
 import {
     errorDisplay, customConfirmOverlay, customConfirmMessage,
-    customConfirmOkButton, customConfirmCancelButton, customPromptInput // Added customPromptInput
+    customConfirmOkButton, customConfirmCancelButton, customPromptInput, customChoiceContainer
 } from './dom.js';
 
 export function clearErrors(): void {
@@ -57,15 +57,25 @@ export function parseJsonFromText(text: string): any {
     }
 }
 
-// --- Custom Confirmation/Prompt Dialog Logic ---
+// --- Custom Confirmation/Prompt/Choice Dialog Logic ---
 let currentOnConfirmCallback: (() => void) | null = null;
-let currentOnPromptConfirmCallback: ((value: string) => void) | null = null;
+let currentOnValueConfirmCallback: ((value: string) => void) | null = null;
 let currentOnCancelCallback: (() => void) | null = null;
 
 function handleDialogConfirm() {
     if (customPromptInput && customPromptInput.style.display !== 'none') { // It's a prompt
-        if (currentOnPromptConfirmCallback) {
-            currentOnPromptConfirmCallback(customPromptInput.value);
+        if (currentOnValueConfirmCallback) {
+            currentOnValueConfirmCallback(customPromptInput.value);
+        }
+    } else if (customChoiceContainer && customChoiceContainer.style.display !== 'none') { // It's a choice dialog
+        const selected = customChoiceContainer.querySelector('input[type="radio"]:checked') as HTMLInputElement;
+        if (selected && currentOnValueConfirmCallback) {
+            currentOnValueConfirmCallback(selected.value);
+        } else if (currentOnValueConfirmCallback) {
+            // If nothing is selected, maybe cancel or do nothing? For now, we'll assume something is always selected.
+            // Let's call it with an empty string to signal no selection, or just hide.
+            // The logic ensures a default is checked, so this path is unlikely.
+            hideCustomConfirmDialog(); 
         }
     } else { // It's a confirm
         if (currentOnConfirmCallback) {
@@ -87,10 +97,10 @@ export function showCustomConfirmDialog(
     onConfirm: () => void,
     onCancel?: () => void,
     parentElement?: HTMLElement | null,
-    isDestructive: boolean = true // Added to control OK button style
+    isDestructive: boolean = true
 ): void {
     if (!customConfirmOverlay || !customConfirmMessage || !customPromptInput || !customConfirmOkButton || !customConfirmCancelButton) {
-        console.error("Custom confirm/prompt dialog elements not found. Falling back to window.confirm.");
+        console.error("Custom confirm dialog elements not found. Falling back to window.confirm.");
         if (window.confirm(message)) {
             onConfirm();
         } else {
@@ -100,15 +110,16 @@ export function showCustomConfirmDialog(
     }
 
     customConfirmMessage.textContent = message;
-    customPromptInput.style.display = 'none'; // Ensure prompt input is hidden for confirm dialog
+    customPromptInput.style.display = 'none';
     customPromptInput.value = '';
-
+    customChoiceContainer.style.display = 'none';
+    customChoiceContainer.innerHTML = '';
 
     customConfirmOkButton.removeEventListener('click', handleDialogConfirm);
     customConfirmCancelButton.removeEventListener('click', handleDialogCancel);
 
     currentOnConfirmCallback = onConfirm;
-    currentOnPromptConfirmCallback = null; // Not a prompt
+    currentOnValueConfirmCallback = null;
     currentOnCancelCallback = onCancel || null;
 
     customConfirmOkButton.addEventListener('click', handleDialogConfirm);
@@ -128,7 +139,6 @@ export function showCustomConfirmDialog(
     customConfirmOverlay.style.display = 'flex';
 }
 
-
 export function showCustomPromptDialog(
     message: string,
     onConfirm: (value: string) => void,
@@ -137,8 +147,7 @@ export function showCustomPromptDialog(
     defaultValue: string = ''
 ): void {
     if (!customConfirmOverlay || !customConfirmMessage || !customPromptInput || !customConfirmOkButton || !customConfirmCancelButton) {
-        console.error("Custom confirm/prompt dialog elements not found. Cannot show prompt.");
-        // Potentially call onCancel or a specific error handler if critical
+        console.error("Custom prompt dialog elements not found. Cannot show prompt.");
         if(onCancel) onCancel();
         return;
     }
@@ -147,47 +156,115 @@ export function showCustomPromptDialog(
     customPromptInput.style.display = 'block';
     customPromptInput.value = defaultValue;
     customPromptInput.focus();
-
+    customChoiceContainer.style.display = 'none';
+    customChoiceContainer.innerHTML = '';
 
     customConfirmOkButton.removeEventListener('click', handleDialogConfirm);
     customConfirmCancelButton.removeEventListener('click', handleDialogCancel);
 
-    currentOnConfirmCallback = null; // Not a simple confirm
-    currentOnPromptConfirmCallback = onConfirm;
+    currentOnConfirmCallback = null;
+    currentOnValueConfirmCallback = onConfirm;
     currentOnCancelCallback = onCancel || null;
 
     customConfirmOkButton.addEventListener('click', handleDialogConfirm);
     customConfirmCancelButton.addEventListener('click', handleDialogCancel);
     
     customConfirmOkButton.textContent = 'OK';
-    customConfirmOkButton.classList.remove('confirm-ok-destructive'); // Ensure neutral style
+    customConfirmOkButton.classList.remove('confirm-ok-destructive');
 
-    const targetParent = parentElement || document.getElementById('controlsOverlay') || document.body; // Default to controlsOverlay for prompts
+    const targetParent = parentElement || document.getElementById('controlsOverlay') || document.body;
     if (customConfirmOverlay.parentNode !== targetParent) {
         targetParent.appendChild(customConfirmOverlay);
     }
     customConfirmOverlay.style.display = 'flex';
 }
 
+export function showCustomChoiceDialog(
+    message: string,
+    choices: { value: string; label: string; description?: string; checked?: boolean }[],
+    onConfirm: (value: string) => void,
+    onCancel?: () => void,
+    parentElement?: HTMLElement | null
+): void {
+    if (!customConfirmOverlay || !customConfirmMessage || !customChoiceContainer || !customPromptInput || !customConfirmOkButton || !customConfirmCancelButton) {
+        console.error("Custom choice dialog elements not found. Cannot show choices.");
+        if (onCancel) onCancel();
+        return;
+    }
+
+    customConfirmMessage.textContent = message;
+    customPromptInput.style.display = 'none';
+    customPromptInput.value = '';
+    customChoiceContainer.innerHTML = '';
+    customChoiceContainer.style.display = 'block';
+
+    const radioGroupName = `custom-choice-${Date.now()}`;
+    choices.forEach((choice, index) => {
+        const div = document.createElement('div');
+        div.className = 'custom-choice-item';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = radioGroupName;
+        input.value = choice.value;
+        input.id = `${radioGroupName}-${index}`;
+        if (choice.checked || index === 0) {
+            input.checked = true;
+        }
+
+        const label = document.createElement('label');
+        label.htmlFor = input.id;
+        label.innerHTML = `${choice.label}${choice.description ? `<small>${choice.description}</small>` : ''}`;
+
+        div.appendChild(input);
+        div.appendChild(label);
+        div.addEventListener('click', () => { input.checked = true; });
+
+        customChoiceContainer.appendChild(div);
+    });
+
+    customConfirmOkButton.removeEventListener('click', handleDialogConfirm);
+    customConfirmCancelButton.removeEventListener('click', handleDialogCancel);
+
+    currentOnConfirmCallback = null;
+    currentOnValueConfirmCallback = onConfirm;
+    currentOnCancelCallback = onCancel || null;
+
+    customConfirmOkButton.addEventListener('click', handleDialogConfirm);
+    customConfirmCancelButton.addEventListener('click', handleDialogCancel);
+
+    customConfirmOkButton.textContent = 'OK';
+    customConfirmOkButton.classList.remove('confirm-ok-destructive');
+
+    const targetParent = parentElement || document.body;
+    if (customConfirmOverlay.parentNode !== targetParent) {
+        targetParent.appendChild(customConfirmOverlay);
+    }
+    customConfirmOverlay.style.display = 'flex';
+}
 
 export function hideCustomConfirmDialog(): void {
     if (customConfirmOverlay) {
         customConfirmOverlay.style.display = 'none';
     }
-    if (customPromptInput) { // Also hide prompt input when dialog closes
+    if (customPromptInput) {
         customPromptInput.style.display = 'none';
         customPromptInput.value = '';
     }
+    if (customChoiceContainer) {
+        customChoiceContainer.style.display = 'none';
+        customChoiceContainer.innerHTML = '';
+    }
     if (customConfirmOkButton) {
         customConfirmOkButton.removeEventListener('click', handleDialogConfirm);
-        customConfirmOkButton.classList.remove('confirm-ok-destructive'); // Reset style
+        customConfirmOkButton.classList.remove('confirm-ok-destructive');
     }
     if (customConfirmCancelButton) {
         customConfirmCancelButton.removeEventListener('click', handleDialogCancel);
     }
     
     currentOnConfirmCallback = null;
-    currentOnPromptConfirmCallback = null;
+    currentOnValueConfirmCallback = null;
     currentOnCancelCallback = null;
 }
 

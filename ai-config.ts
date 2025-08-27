@@ -38,6 +38,13 @@ export const DEFAULT_TEMPLATE_SUGGEST_EDIT_WIKIDATA_LINK_NAME = `${DEFAULT_TEMPL
 export const DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_TERM_EXTRACTION_NAME = "SYSTEM_WIKIDATA_TERM_EXTRACTION";
 export const DEFAULT_TEMPLATE_SYSTEM_WIKIDATA_LINK_REWRITER_NAME = "SYSTEM_WIKIDATA_LINK_REWRITER";
 
+// New template for resolving grounding URLs
+export const DEFAULT_TEMPLATE_SYSTEM_URL_RESOLVER_NAME = "SYSTEM_URL_RESOLVER";
+
+// New templates for contextual text suggestions
+export const DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_PAIR_NAME = "SUGGEST_CONTEXT_TEXT_PAIR";
+export const DEFAULT_TEMPLATE_SUGGEST_CONTEXT_TEXT_SINGLE_NAME = "SUGGEST_CONTEXT_TEXT_SINGLE";
+
 
 export const DEFAULT_TEMPLATE_CONTENT_SYSTEM_PROMPT_MAIN: string = `
 You are an AI assistant specialized in analyzing discourse and structuring it according to the provided RAI (Rational Argumentation Index) ruleset.
@@ -50,7 +57,7 @@ Adhere strictly to the following ruleset and output format.
 `.trim();
 
 export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
-## RAI Discourse Structure Ruleset V2.0 ##
+## RAI Discourse Structure Ruleset V2.2 ##
 # Goal: Structure discourse as a network of DiscussionPoints (DPs) connected by typed Connections.
 # Apply these rules strictly for validation and generation.
 
@@ -82,10 +89,14 @@ export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
 ## DP Formulation & Granularity:
 - Unit: Represents a single, distinct point (question, claim, example, etc.). Can span multiple sentences if forming one coherent point.
 - Conciseness: As brief as possible, as detailed as necessary for clarity and minimal ambiguity.
-- Context-Independence: Formulate DPs (esp. 'statement' and 'question' types) to be understandable standalone, across different contexts.
+- **Context-Independence & Specificity:**
+    - A DP must be understandable on its own without relying on surrounding DPs for essential context (e.g., avoid ambiguous terms like 'the project' or 'the city').
+    - Statements about time-sensitive events or plans must include specific, absolute temporal information (e.g., 'In 2024...', 'The Q3 report...'). Avoid relative time references like "currently".
     - AVOID: Direct contextual references (e.g., "Yes, because...", "Regarding the previous point..."). Use neutral phrasing.
     - EXCEPTION: The 'justifies' connection type makes an 'argument' DP inherently context-dependent on the justified claim.
-- Neutrality: Strive for objective, factual language. Avoid loaded terms or overt value judgments *within the DP itself*.
+- **Neutrality & Attribution:**
+    - Strive for objective, factual language. Avoid loaded terms or overt value judgments *within the DP itself*.
+    - Subjective claims, opinions, or interpretations should be explicitly attributed to their source rather than being stated as objective facts (e.g., "Proponents claim..." instead of "This policy fixed...").
     - Handling Values: If a DP implicitly contains a disputed value judgment, represent that judgment as a separate 'statement' DP and link via 'isPresupposedBy'.
 - Clarity & Precision: Use unambiguous terms. Link terms/names to external identifiers (e.g., Wikidata QID) via metadata if needed to resolve ambiguity.
 
@@ -97,8 +108,8 @@ export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
     - Use 'isCitedBy' for Excerpts: '(Excerpt_DP isCitedBy DP_using_excerpt)', and '(Reference_DP isCitedBy Excerpt_DP)'.
 - Use Case (Reference vs. Reconstruction):
     - Use 'reference'/'isCitedBy': If source provenance is key, OR if argument relies on complex/non-reconstructible external content (e.g., detailed study results).
-    - Use Reconstruction: If argument is simple, self-contained, and could be formulated independently of the specific source. Reconstruct as standard DPs/Connections.
-- Distinction: Clearly differentiate 'DP.statement: Y is the case.' from 'DP.statement: Source X claims Y is the case.'
+    - Use Reconstruction: If argument is simple, self-contained, and could be formulated independently of the specific source.
+- **Distinction of Claims:** Clearly differentiate between a statement reporting a source's claim ('DP.statement: Source X reports Y.') and a statement asserting the claim as a fact ('DP.statement: Y is the case.'). This is crucial for modeling indirect contradictions and justifications.
 
 # --- Connection Rules (General) ---
 
@@ -120,47 +131,53 @@ export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
 - **Contextualized Text for Connections:**
     - **Purpose:** To improve readability in presentations by reducing redundancy. This feature is optional but should be used whenever it enhances clarity and conciseness.
     - **Mechanism:** A connection can include a contextualized version of the subject's text, the object's text, or both.
-    - **Content:** The text is a shortened or rephrased version of the respective DP, omitting information that is redundant or implied by the context of the other DP in the connection.
+    - **Content:** The text is a shortened or rephrased version of the respective DP, omitting information that is redundant or implied by the context of the other DP in the connection. It must not be a meta-statement *about* the DP or connection.
     - **CRITICAL CONSTRAINT:** The contextualized text MUST NOT introduce any new information not present in the original DP text. It is purely a reductive transformation.
     - **Special Generation Guidelines:**
         - **'contradicts'**: Contextualized text should be provided for both subject and object, each focusing on the specific aspect or part that is contradictory to the other.
-        - **'isCitedBy'**: For the connection '(Reference_DP isCitedBy Citing_DP)', the contextualized text of the subject ('Reference_DP') should be the specific quoted excerpt from the source, if a distinct one can be singled out from the 'Citing_DP'.
+        - **'isCitedBy'**: For the connection '(Reference_DP isCitedBy Citing_DP)', the contextualized text of the subject ('Reference_DP') should represent the specific content or mention of the source within the 'Citing_DP'. If a direct quote is present, use that quote (in quotation marks). If a specific finding is paraphrased, use a concise version of that paraphrase. If the source is only mentioned by name/year, use that specific phrase (e.g., '"the 2023 JAMA study"').
         - **'isEqual'/'isPotentiallyEqual'**: As a major exception to the reductive transformation rule, the contextualized text should not be a derivative of the DP text. Instead, it should be a short, symmetric explanation of *why* the two DPs are considered equal, e.g., "Uses different wording for the same concept" or "Reformulation in active vs. passive voice". The same explanation applies to both subject and object.
-- Multiple Connections: Allowed between same X, Y if types are logically compatible.
+- **Structural Integrity:**
+    - Multiple Connections: Allowed between same X, Y if types are logically compatible.
     - Priority: Always prefer the *most specific* applicable ConnectionType.
-- Selectivity: Only map relations corresponding to defined ConnectionTypes. Do NOT invent relations.
-- Avoid Redundancy: Do not create DPs/Connections that duplicate information already captured by a more direct structure.
-- Indirect Mapping: Represent some concepts indirectly (e.g., NO 'Counter-Argument' type; map as an 'argument' that 'justifies' a 'statement' which 'contradicts' the original).
+    - Selectivity: Only map relations corresponding to defined ConnectionTypes. Do NOT invent relations.
+    - Chaining: In a logical chain (e.g., 'specifies'), each link should connect to the next immediate step, not skip levels.
+    - Relevance: Connections should be made to the most specific and logically proximate DP available.
+    - To connect two distinct but related DPs, consider adding a more general DP that both can 'specify'.
+    - Avoid Redundancy: Do not create DPs/Connections that duplicate information already captured by a more direct structure.
+- **Indirect Mapping:** Represent some concepts indirectly.
+    - Counter-Arguments: Map as an 'argument' that 'justifies' a 'statement' which 'contradicts' the original claim.
+    - Indirect Contradictions: A contradiction between source claims must be modeled indirectly by having arguments justify opposing factual statements.
 
 # --- ConnectionType Definitions ---
+(The detailed descriptions below are supplemental to the main rules above)
 
-## ConnectionType: FrageAntwort
+## ConnectionType: Frage / Antwort
 - Structure: 'X questions Y' / 'X answers Y'.
 - Question DP Form: Clear grammatical question. Elaboration before/after sentence ok, not mixed. AVOID rhetorical questions (rephrase as 'statement' if content relevant).
 - Answer DP Form: Ideally a standalone 'statement', context-independent. AVOID "Yes/No". Context-dependent ok only if necessary AND no other type fits.
 - Scope: Use for actual question-answer pairs in the discourse that are NOT better represented by another specific type.
 - Default Use: Can be used if no other type fits, BUT do NOT use systematically to simulate missing types via meta-questions (e.g. AVOID "What justifies Y?").
 - Interaction: NEVER use 'answers' if the DP provides justification; use 'justifies' type instead.
+- Contextualized Text for 'answers': For yes/no questions, the text should be a concise "Yes/No" plus the core reason.
 - AVOID: Linear dialog chains in structure. Connect new elements to the Answer DP.
 
 ## ConnectionType: Gleichheit / PotentielleGleichheit
 - Structure: 'X isEqual Y' / 'X isPotentiallyEqual Y'.
 - **Gleichheit Criteria:**
-    - Definition: X and Y have exactly the same semantic meaning, differing only in phrasing/wording.
-    - Test: X and Y must be fully interchangeable in *all* possible connections within the RAI structure without altering network semantics.
+    - Definition: X and Y have exactly the same semantic meaning and must be fully interchangeable in *all* possible connections.
     - References: Two 'reference' DPs are equal if they point to the identical external source.
 - **PotentielleGleichheit Criteria:**
-    - Definition: No clear Gleichheit, BUT also no clear difference mappable by another specific type.
-    - Test: Interchangeable in *most* contexts, but known/plausible context exists where interchangeability fails.
-    - Application: Use RESTRICTIVELY.
+    - Definition: No clear Gleichheit, BUT also no clear difference. Interchangeable in *most* but not all contexts.
+    - Application: Use RESTRICTIVELY for near-synonyms with subtle but important differences in meaning.
 - Handling: Represents functional equivalence. No DP merging.
 - Distinction: Clearly differentiate from Praezisierung and Implikation.
-- Contextualized Text: Provide a short explanation of *why* they are equal.
+- Contextualized Text: Provide a short explanation of *why* they are equal or what the nuance is.
 
 ## ConnectionType: Praezisierung
 - Structure: 'X specifies Y'.
 - Direction: X is the more specific DP, Y is the more general DP.
-- Criteria: X makes the content of Y more specific by adding details, constraints, parameters, or by narrowing scope.
+- Criteria: X makes the content of Y more specific by adding details, constraints, parameters, or by narrowing scope. A statement about a specific concept (e.g. 'consumer price') cannot 'specify' a statement about a different one ('production cost').
 - Logic: Does NOT require logical entailment.
 - Distinction vs Implikation: 'implies' = logical consequence. 'specifies' = thematic specification. Can co-exist.
 - Distinction vs Beispiel: 'specifies' modifies the *statement* Y. 'isExampleFor' provides an *instance* illustrating Y.
@@ -186,10 +203,10 @@ export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
 ## ConnectionType: Praesupposition
 - Structure: 'X isPresupposedBy Y'.
 - Meaning: 'statement' X is a presupposition held by DP Y.
-- Criteria: DP Y loses its *essential intended meaning* or becomes nonsensical if the 'statement' X is false.
+- Criteria: DP Y loses its *essential intended meaning* or becomes nonsensical if the 'statement' X is false. The presupposition must be a necessary condition for Y's sensicality.
 - Strictness: Stricter than mere falsification. Must affect the *applicability* of Y.
 - Partial Sense Loss: If the *core, intended meaning* of Y collapses without X, it's a Praesupposition.
-- Implicit Presuppositions: Extract and map only if *discourse-relevant* (disputed, non-obvious, or key for analysis).
+- Implicit Presuppositions: Extract and map only if *discourse-relevant* (disputed, non-obvious, or key for analysis). Avoid modeling universal, self-evident presuppositions (e.g., the validity of logic).
 - Use with Arguments: Premises of an 'argument' are its Praesuppositions. '(Premise_Statement_DP isPresupposedBy Argument_DP)'.
 - Distinction vs Implikation: Key test is *meaning loss* ('isPresupposedBy') vs. *truth-conditional link* ('implies'). If Y remains meaningful (though potentially false) when X is false, it's likely '(Y implies X)', not '(X isPresupposedBy Y)'.
 - Application: Use RESTRICTIVELY, only when strict meaning-loss criterion is met.
@@ -197,36 +214,32 @@ export const DEFAULT_TEMPLATE_CONTENT_RAI_RULESET: string = `
 ## ConnectionType: Implikation
 - Structure: 'X implies Y'.
 - Logic: Semantically means 'X entails Y'. If X is true, Y must be true.
+- Criteria: Entailment must be *clear and directly evident* from the DPs, requiring no external knowledge or complex reasoning. If an argument is needed to show the link, use 'justifies'.
 - Duality: Represents both 'X is sufficient for Y' AND 'Y is necessary for X'.
-- Criteria: Entailment 'X entails Y' must be *clear and directly evident* from the DPs, typically based on logic or conceptual relations. Requires NO additional assumptions.
-- Distinction vs Praezisierung: Can co-exist if '(X specifies Y)' AND '(X implies Y)'.
-- Distinction vs Begruendung: 'implies' is for *self-evident* entailment. If an argument is needed, use 'justifies'.
 
 ## ConnectionType: Beispiel
 - Structure: 'X isExampleFor Y'.
-- Criteria: 'statement' X describes a specific case that *illustrates* the more general 'statement' Y.
-- Fit: X must genuinely instantiate the core aspect of Y (e.g., causality, not just correlation).
+- Criteria: 'statement' X describes a specific case that *illustrates* the general 'statement' Y.
+- Fit: X must genuinely instantiate the core aspect of Y. A general claim and its example must describe the same kind of phenomenon (e.g., both descriptive, not normative vs. descriptive).
 - Form: X should ideally be a standalone, context-independent DP.
 - Truth/Context: X should be factual or plausible. Hypothetical examples require context *within the DP text*.
 - Function: Aids understanding and links specifics to generalities.
-- Distinction vs Begruendung: 'isExampleFor' illustrates; 'justifies' aims to prove. A 'statement' can be a premise of an 'argument' ('isPresupposedBy').
-- Representativeness: Appropriateness depends on Y.
+- Distinction vs Begruendung: 'isExampleFor' illustrates; 'justifies' aims to prove.
 
 ## ConnectionType: Zitation
 - Structure: 'X isCitedBy Y'.
 - Meaning: 'reference' DP X is cited by DP Y.
 - Types Covered: Includes direct quotation, indirect paraphrase, or reference to source X as evidence within Y.
 - Function: Records provenance; links to external details; enables reverse lookups.
-- Granularity: Does not specify *which part* of X is cited. Specificity should be in Y's text or by citing a specific Excerpt DP.
 - Interaction with Logic/Arguments:
-    - 'isCitedBy' is NOT 'justifies'.
+    - An 'argument' cannot directly presuppose a 'reference'. It must presuppose a 'statement' which in turn 'isCitedBy' the reference.
     - If content from source X is used as a premise P in an argument Y: Model explicitly. E.g.:
-        1. Create 'statement' DP 'P' (the premise content).
+        1. Create 'statement' DP 'P'.
         2. Create 'statement' DP 'Y'' stating "'Source X' claims P". Connect '(X isCitedBy Y')'.
-        3. Connect '(P isPresupposedBy Argument_Y)' (if argument relies on P's truth).
+        3. Connect '(P isPresupposedBy Argument_Y)'.
         4. Optionally, create 'argument' DP 'Arg_P' and connect '(Arg_P justifies P)' and '(Y' isPresupposedBy Arg_P)'.
 - Requirement: Y must have an *intended semantic connection* to X. If Y's validity depends on X's accuracy, model this via 'isPresupposedBy'.
-- Contextualized Text: For X (the reference), provide the quoted excerpt from Y if possible.
+- **Contextualized Text:** For the subject X (the reference), provide the specific content being utilized from the citing DP (Y). This should be the direct quote if one exists (in quotation marks), a concise summary of a paraphrased finding, or the specific text string that mentions the source (e.g., '"the WHO's 2023 report"').
 `.trim();
 
 export const DEFAULT_TEMPLATE_CONTENT_OUTPUT_FORMAT_RULES: string = `
@@ -434,4 +447,93 @@ Output Instructions:
 Respond with ONLY the rewritten DP text, with appropriate Wikidata links incorporated.
 If no changes are made (e.g., no suitable QIDs found, or original text already perfectly linked), output the original text.
 Do not include any conversational phrases, explanations, or markdown formatting around your suggestion.
+`.trim();
+
+export const DEFAULT_TEMPLATE_CONTENT_SYSTEM_URL_RESOLVER: string = `
+You are an AI utility that resolves redirect URLs within a given text block.
+Your task is to find all URLs that start with "https://vertexaisearch.cloud.google.com/grounding-api-redirect/" and replace them with their final destination URL.
+You MUST NOT change any other part of the text, including formatting, DP IDs, predicates, or any other content.
+Only the URLs themselves should be replaced.
+If you cannot resolve a URL, leave it as it is.
+
+Here is the text block to process:
+\`\`\`
+{{TEXT_WITH_URLS}}
+\`\`\`
+
+Respond with ONLY the modified text block. Do not add any conversational phrases, explanations, or markdown formatting around your suggestion.
+`.trim();
+
+
+export const DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_PAIR: string = `
+You are an AI assistant helping to define contextual text for a new connection in a knowledge graph, according to the RAI ruleset.
+The goal is to create shortened or rephrased versions of the connected DPs that omit information redundant in the context of the other DP.
+The contextual text MUST NOT introduce any new information. It is a reductive transformation only.
+
+{{${DEFAULT_TEMPLATE_RAI_RULESET_NAME}}}
+{{${DEFAULT_TEMPLATE_SYSTEM_PRESERVE_REFERENCES_HINT_NAME}}}
+
+Connection Details:
+- **Connection Being Formed:** (Subject DP) {{PREDICATE_PHRASE}} (Object DP)
+- **Subject DP Full Text:**
+  \`\`\`text
+  {{SUBJECT_DP_TEXT}}
+  \`\`\`
+- **Object DP Full Text:**
+  \`\`\`text
+  {{OBJECT_DP_TEXT}}
+  \`\`\`
+
+Your Task:
+1.  Analyze both DP texts and the connecting relationship.
+2.  Suggest a 'subjectContext' text: a version of the Subject DP's text that is concise and relevant in the context of the Object DP.
+3.  Suggest an 'objectContext' text: a version of the Object DP's text that is concise and relevant in the context of the Subject DP.
+4.  If a DP's text is already very concise and cannot be meaningfully shortened without losing essential information, you may return the original text for that side.
+5.  If you believe no contextual text is necessary for a side, return an empty string for it.
+
+Output Instructions:
+Respond with ONLY a single JSON object with two properties: "subjectContext" (string) and "objectContext" (string).
+Do not include any conversational phrases, explanations, or markdown formatting.
+
+Example output:
+{
+  "subjectContext": "The impact on local businesses",
+  "objectContext": "The new zoning regulations"
+}
+`.trim();
+
+export const DEFAULT_TEMPLATE_CONTENT_SUGGEST_CONTEXT_TEXT_SINGLE: string = `
+You are an AI assistant helping to define contextual text for one side of a new connection in a knowledge graph, according to the RAI ruleset.
+The goal is to create a shortened or rephrased version of the DP that omits information redundant in the context of the other DP.
+The contextual text MUST NOT introduce any new information. It is a reductive transformation only.
+
+{{${DEFAULT_TEMPLATE_RAI_RULESET_NAME}}}
+{{${DEFAULT_TEMPLATE_SYSTEM_PRESERVE_REFERENCES_HINT_NAME}}}
+
+Connection Details:
+- **Connection Being Formed:** (Subject DP) {{PREDICATE_PHRASE}} (Object DP)
+- **Subject DP Full Text:**
+  \`\`\`text
+  {{SUBJECT_DP_TEXT}}
+  \`\`\`
+- **Object DP Full Text:**
+  \`\`\`text
+  {{OBJECT_DP_TEXT}}
+  \`\`\`
+- **Side to Generate For:** {{SIDE_TO_GENERATE}} (This will be either 'subject' or 'object')
+- **Existing Context on Other Side (if any):**
+  \`\`\`text
+  {{OTHER_SIDE_CONTEXT}}
+  \`\`\`
+
+Your Task:
+1.  Analyze both DP texts, the connecting relationship, and the existing context on the other side.
+2.  Suggest a contextual text for the '{{SIDE_TO_GENERATE}}' side.
+3.  The suggestion should be a concise version of the '{{SIDE_TO_GENERATE}}' DP's full text, relevant in the context of the other DP.
+4.  If the DP's text is already concise and cannot be meaningfully shortened, you may return the original text.
+5.  If you believe no contextual text is necessary, return an empty string.
+
+Output Instructions:
+Respond with ONLY the suggested string for the '{{SIDE_TO_GENERATE}}' side's contextual text.
+Do not include any conversational phrases, explanations, or markdown formatting.
 `.trim();

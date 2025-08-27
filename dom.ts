@@ -64,6 +64,18 @@ export const acnnConfirmButton = document.getElementById('acnnConfirmButton') as
 export const acnnCancelButton = document.getElementById('acnnCancelButton') as HTMLButtonElement;
 export const acnnSuggestAiButton = document.getElementById('acnnSuggestAiButton') as HTMLButtonElement; 
 export const acnnAiLoadingIndicator = document.getElementById('acnnAiLoadingIndicator') as HTMLSpanElement; 
+// New Contextual Text Elements
+export const acnnContextualTextSection = document.getElementById('acnnContextualTextSection') as HTMLDivElement;
+export const acnnContextPreviewContainer = document.getElementById('acnnContextPreviewContainer') as HTMLDivElement;
+export const acnnContextPreviewText = document.getElementById('acnnContextPreviewText') as HTMLSpanElement;
+export const acnnSuggestContextBothButton = document.getElementById('acnnSuggestContextBothButton') as HTMLButtonElement;
+export const acnnEditContextButton = document.getElementById('acnnEditContextButton') as HTMLButtonElement;
+export const acnnContextEditorContainer = document.getElementById('acnnContextEditorContainer') as HTMLDivElement;
+export const acnnSubjectContextInput = document.getElementById('acnnSubjectContextInput') as HTMLInputElement;
+export const acnnSuggestSubjectContextButton = document.getElementById('acnnSuggestSubjectContextButton') as HTMLButtonElement;
+export const acnnObjectContextInput = document.getElementById('acnnObjectContextInput') as HTMLInputElement;
+export const acnnSuggestObjectContextButton = document.getElementById('acnnSuggestObjectContextButton') as HTMLButtonElement;
+export const acnnConfirmContextButton = document.getElementById('acnnConfirmContextButton') as HTMLButtonElement;
 
 
 export const switchToManualInputButton = document.getElementById('switchToManualInputButton') as HTMLButtonElement;
@@ -73,6 +85,7 @@ export const aiAssistantPanel = document.getElementById('aiAssistantPanel') as H
 export const aiChatHistoryDiv = document.getElementById('aiChatHistory') as HTMLDivElement;
 export const aiPromptInputElem = document.getElementById('aiPromptInput') as HTMLTextAreaElement;
 export const sendAiPromptButton = document.getElementById('sendAiPromptButton') as HTMLButtonElement;
+export const cancelAiPromptButton = document.getElementById('cancelAiPromptButton') as HTMLButtonElement;
 export const aiLoadingIndicator = document.getElementById('aiLoadingIndicator') as HTMLDivElement;
 export const aiModelSelector = document.getElementById('aiModelSelector') as HTMLSelectElement;
 export const exportChatButton = document.getElementById('exportChatButton') as HTMLButtonElement;
@@ -92,12 +105,17 @@ export const apiKeySaveButton = document.getElementById('apiKeySaveButton') as H
 export const apiKeyProceedWithoutButton = document.getElementById('apiKeyProceedWithoutButton') as HTMLButtonElement;
 export const apiKeySection = document.getElementById('apiKeySection') as HTMLDivElement;
 export const setApiKeyButton = document.getElementById('setApiKeyButton') as HTMLButtonElement;
+export const apiKeyUnsetButton = document.getElementById('apiKeyUnsetButton') as HTMLButtonElement; // New
+export const apiKeyInitialSetupSection = document.getElementById('apiKeyInitialSetupSection') as HTMLDivElement; // New
+export const apiKeyManageSection = document.getElementById('apiKeyManageSection') as HTMLDivElement; // New
+export const apiKeyStatusMessage = document.getElementById('apiKeyStatusMessage') as HTMLParagraphElement; // New
 
 
 // Custom Confirmation/Prompt Dialog Elements
 export const customConfirmOverlay = document.getElementById('customConfirmOverlay') as HTMLDivElement;
 export const customConfirmDialog = document.getElementById('customConfirmDialog') as HTMLDivElement;
 export const customConfirmMessage = document.getElementById('customConfirmMessage') as HTMLParagraphElement;
+export const customChoiceContainer = document.getElementById('customChoiceContainer') as HTMLDivElement;
 export const customPromptInput = document.getElementById('customPromptInput') as HTMLInputElement; 
 export const customConfirmOkButton = document.getElementById('customConfirmOkButton') as HTMLButtonElement;
 export const customConfirmCancelButton = document.getElementById('customConfirmCancelButton') as HTMLButtonElement;
@@ -145,3 +163,6 @@ export const aiTemplateSaveButton = document.getElementById('aiTemplateSaveButto
 export const aiTemplateNewButton = document.getElementById('aiTemplateNewButton') as HTMLButtonElement;
 export const aiTemplateDeleteButton = document.getElementById('aiTemplateDeleteButton') as HTMLButtonElement;
 export const aiLabErrorDisplay = document.getElementById('aiLabErrorDisplay') as HTMLDivElement;
+
+// New Help/API Key button
+export const helpButton = document.getElementById('helpButton') as HTMLButtonElement;
